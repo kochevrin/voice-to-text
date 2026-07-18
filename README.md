@@ -116,6 +116,18 @@ the app silently falls back to the local engine (configurable). Privacy trade-
 off is surfaced in the Privacy tab: while enabled, audio leaves your device;
 the API key is stored in plain text in your local `settings.json`.
 
+## Subscription distribution (optional)
+
+If you distribute prebuilt binaries of whispr-open, the repo bundles an
+honor-system subscription gate: a ~40-line Cloudflare Worker
+(`licensing/worker/`) answers license checks against a KV list of keys you
+manage entirely from the `wrangler` CLI, while the app checks it hourly with a
+7-day trial and indefinite offline grace. It is off by default — an empty
+license server URL in Settings → License keeps the app fully unlocked — and
+since the source is open, it gates honest customers rather than determined
+ones. Setup and subscriber management are described in
+[`licensing/README.md`](licensing/README.md).
+
 ## App data paths
 
 Settings live at `<app-data>/settings.json`, models at

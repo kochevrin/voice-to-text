@@ -1,0 +1,9 @@
+name = "whispr-license"
+main = "worker.js"
+compatibility_date = "2026-07-01"
+
+# Create the namespace with `npx wrangler kv namespace create LICENSES`
+# and paste the id it prints here.
+[[kv_namespaces]]
+binding = "LICENSES"
+id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
