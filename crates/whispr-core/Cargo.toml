@@ -1,0 +1,11 @@
+[package]
+name = "whispr-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Pure-logic core for whispr-open: VAD trigger, hotkey normalization, injection planning, settings model. No system dependencies."
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
