@@ -2,11 +2,11 @@
 
 whispr-open ships an **optional, honor-system** subscription gate for people
 who distribute prebuilt binaries. It is a tiny Cloudflare Worker
-([`worker/worker.js`](worker/worker.js), ~40 lines) that answers
+([`worker/worker.js`](worker/worker.js), a single file) that answers
 `GET /check?key=<license-key>` with `{"active": bool, "expires": "YYYY-MM-DD" | null}`
 by looking the key up in a Cloudflare KV namespace. You manage subscribers
-entirely from the `wrangler` CLI — no database, no backend code, and the whole
-thing fits in Cloudflare's free tier.
+from the `wrangler` CLI or the built-in admin panel — no database, no separate
+backend, and the whole thing fits in Cloudflare's free tier.
 
 ## One-time setup
 
@@ -31,7 +31,7 @@ license server. (If you prefer scaffolding from scratch, `npm create
 cloudflare` works too, but the bundled `worker.js` + `wrangler.toml` are all
 you need.)
 
-## Managing subscribers (CLI only)
+## Managing subscribers (CLI)
 
 A license key is any string you invent — `uuidgen` output works fine. The KV
 value is the subscription's expiry date, `YYYY-MM-DD`; the key is active while
@@ -60,6 +60,24 @@ curl "https://whispr-license.<your-subdomain>.workers.dev/check?key=<license-key
 curl "https://whispr-license.<your-subdomain>.workers.dev/check?key=nope"
 # -> {"active":false,"expires":null}
 ```
+
+## Admin panel
+
+Prefer a UI? The worker also serves a small admin panel at `/admin`. Enable it
+once by setting a secret (from `licensing/worker/`):
+
+```sh
+npx wrangler secret put ADMIN_TOKEN   # paste a long random string
+```
+
+Then open <https://license.kk-lab.net/admin> (your worker URL + `/admin`) and
+paste the same token to sign in. You can list, add, extend, and delete keys
+there; the CLI commands above keep working alongside.
+
+The token is the panel's only protection — make it long and random
+(`openssl rand -base64 32` output works). If you want more hardening later,
+layer [Cloudflare Access](https://developers.cloudflare.com/cloudflare-one/policies/access/)
+on `/admin*` in front of the worker.
 
 ## Hooking it up to the app
 
