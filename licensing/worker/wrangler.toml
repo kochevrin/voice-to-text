@@ -2,8 +2,12 @@ name = "whispr-license"
 main = "worker.js"
 compatibility_date = "2026-07-01"
 
+routes = [
+  { pattern = "license.kk-lab.net", custom_domain = true }
+]
+
 # Create the namespace with `npx wrangler kv namespace create LICENSES`
 # and paste the id it prints here.
 [[kv_namespaces]]
 binding = "LICENSES"
-id = "REPLACE_WITH_YOUR_KV_NAMESPACE_ID"
+id = "59240908fc2c4980b307c13920111c10"
