@@ -30,3 +30,6 @@ Thumbs.db
 # Brand source asset (copies live in docs/ and src/assets/)
 /logo2.png
 /logos/
+
+# Playwright MCP scratch output
+.playwright-mcp/
