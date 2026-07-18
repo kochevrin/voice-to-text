@@ -5,6 +5,7 @@ mod cloud;
 mod commands;
 mod hotkeys;
 mod inject;
+mod license;
 mod models;
 mod pill;
 mod postproc;
@@ -59,6 +60,7 @@ pub fn run() {
                 tracing::warn!("{e}");
                 state::notify(&handle, "whispr-open", &e);
             }
+            license::spawn_periodic_check(&handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -78,6 +80,8 @@ pub fn run() {
             commands::set_paused,
             commands::open_permission_settings,
             commands::open_repo,
+            commands::get_license_status,
+            commands::check_license_now,
         ])
         .run(tauri::generate_context!())
         .expect("error while running whispr-open");

@@ -27,15 +27,18 @@ import { HotkeyCapture } from "@/components/HotkeyCapture";
 import { useSettings } from "@/hooks/useSettings";
 import type {
   HotkeyMode,
+  LicenseStatus,
   ModelDownloadProgress,
   ModelInfo,
   Settings as SettingsType,
 } from "@/lib/types";
 import {
+  checkLicenseNow,
   clearHistory,
   deleteModel,
   downloadModel,
   getDiskUsage,
+  getLicenseStatus,
   listInputDevices,
   listModels,
   onModelDownloadProgress,
@@ -140,11 +143,12 @@ export function Settings({ onClose }: SettingsProps) {
       </header>
 
       <Tabs defaultValue="general" className="flex flex-1 flex-col overflow-hidden p-4">
-        <TabsList className="grid w-full shrink-0 grid-cols-4">
+        <TabsList className="grid w-full shrink-0 grid-cols-5">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="transcription">Transcription</TabsTrigger>
           <TabsTrigger value="postproc">Post-processing</TabsTrigger>
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
+          <TabsTrigger value="license">License</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="mt-4 flex-1 space-y-5 overflow-y-auto">
@@ -164,6 +168,10 @@ export function Settings({ onClose }: SettingsProps) {
 
         <TabsContent value="privacy" className="mt-4 flex-1 space-y-5 overflow-y-auto">
           <PrivacyTab draft={draft} update={update} />
+        </TabsContent>
+
+        <TabsContent value="license" className="mt-4 flex-1 space-y-5 overflow-y-auto">
+          <LicenseTab draft={draft} update={update} />
         </TabsContent>
       </Tabs>
     </div>
@@ -626,6 +634,76 @@ function PrivacyTab({ draft, update }: TabProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+    </>
+  );
+}
+
+function formatLicenseStatus(status: LicenseStatus): string {
+  switch (status.state) {
+    case "disabled":
+      return "Disabled";
+    case "trial":
+      return `Trial — ${status.trial_days_left ?? 0} days left`;
+    case "active":
+      return `Active until ${status.expires ?? "unknown date"}`;
+    case "inactive":
+      return "Inactive — dictation blocked";
+    case "unverified":
+      return "Unverified — could not reach server";
+  }
+}
+
+function LicenseTab({ draft, update }: TabProps) {
+  const [status, setStatus] = useState<LicenseStatus | null>(null);
+
+  const updateLicense = (patch: Partial<SettingsType["license"]>) => {
+    update({ license: { ...draft.license, ...patch } });
+  };
+
+  useEffect(() => {
+    void getLicenseStatus().then(setStatus);
+  }, []);
+
+  const handleCheck = async () => {
+    setStatus(await checkLicenseNow());
+  };
+
+  return (
+    <>
+      <div className="space-y-2">
+        <Label htmlFor="license-key">License key</Label>
+        <Input
+          id="license-key"
+          aria-label="License key"
+          value={draft.license.key}
+          onChange={(e) => updateLicense({ key: e.target.value })}
+        />
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="license-server-url">License server URL</Label>
+        <Input
+          id="license-server-url"
+          aria-label="License server URL"
+          value={draft.license.server_url}
+          onChange={(e) => updateLicense({ server_url: e.target.value })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Leave empty to disable licensing entirely (open-source mode).
+        </p>
+      </div>
+
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Status:{" "}
+          <span className="font-medium text-foreground">
+            {status === null ? "…" : formatLicenseStatus(status)}
+          </span>
+        </p>
+        <Button variant="outline" onClick={() => void handleCheck()}>
+          Check now
+        </Button>
+      </div>
     </>
   );
 }

@@ -7,7 +7,7 @@ use whispr_core::{normalize_hotkey, HotkeyError, Settings, MODEL_IDS};
 
 use crate::models::{self, DiskUsage, ModelInfo};
 use crate::state::{self, AppState, HistoryEntry};
-use crate::{audio, hotkeys, postproc, session, tray};
+use crate::{audio, hotkeys, license, postproc, session, tray};
 
 fn hotkey_error_message(err: HotkeyError) -> String {
     match err {
@@ -57,6 +57,14 @@ pub async fn set_settings(
         guard.clone()
     };
     state::save_settings(&app, &stored)?;
+    if stored.license != previous.license {
+        // License key/server changed: re-check in the background without
+        // blocking the save.
+        let app_for_check = app.clone();
+        tauri::async_runtime::spawn(async move {
+            license::run_check(&app_for_check).await;
+        });
+    }
     tray::refresh_menu(&app);
     Ok(stored)
 }
@@ -181,4 +189,14 @@ pub async fn open_permission_settings() -> Result<(), String> {
 pub async fn open_repo() -> Result<(), String> {
     tauri_plugin_opener::open_url("https://github.com/kochevrin/voice-to-text", None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_license_status(app: AppHandle) -> Result<license::LicenseStatus, String> {
+    Ok(license::current_status(&app))
+}
+
+#[tauri::command]
+pub async fn check_license_now(app: AppHandle) -> Result<license::LicenseStatus, String> {
+    Ok(license::check_now(&app).await)
 }

@@ -18,6 +18,11 @@ export interface CloudSettings {
   fallback_to_local: boolean;
 }
 
+export interface LicenseSettings {
+  key: string;
+  server_url: string;
+}
+
 export interface Settings {
   hotkey: string;
   hotkey_mode: HotkeyMode;
@@ -30,8 +35,23 @@ export interface Settings {
   postproc: PostprocSettings;
   cloud: CloudSettings;
   history_enabled: boolean;
+  license: LicenseSettings;
   onboarding_done: boolean;
   paused: boolean;
+}
+
+export type LicenseState =
+  | "disabled"
+  | "trial"
+  | "active"
+  | "inactive"
+  | "unverified";
+
+export interface LicenseStatus {
+  state: LicenseState;
+  trial_days_left: number | null;
+  expires: string | null;
+  last_checked_ms: number | null;
 }
 
 export interface ModelInfo {

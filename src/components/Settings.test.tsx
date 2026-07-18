@@ -133,6 +133,59 @@ describe("Settings (mock mode)", () => {
     ).not.toBeChecked();
   });
 
+  it("persists license key and server URL across remount", async () => {
+    const user = userEvent.setup();
+    const first = render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByRole("tab", { name: "License" }));
+    await user.type(screen.getByLabelText("License key"), "WHSPR-TEST-KEY");
+    await user.type(
+      screen.getByLabelText("License server URL"),
+      "https://license.example.com",
+    );
+
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    await user.click(saveButton);
+    await waitFor(() => expect(saveButton).toBeDisabled());
+    expect(
+      JSON.parse(localStorage.getItem("whispr-mock-settings") ?? "{}"),
+    ).toMatchObject({
+      license: { key: "WHSPR-TEST-KEY", server_url: "https://license.example.com" },
+    });
+
+    first.unmount();
+
+    // Fresh mount reads the persisted license settings from the mock backend.
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+    await user.click(screen.getByRole("tab", { name: "License" }));
+    expect(screen.getByLabelText("License key")).toHaveValue("WHSPR-TEST-KEY");
+    expect(screen.getByLabelText("License server URL")).toHaveValue(
+      "https://license.example.com",
+    );
+  });
+
+  it("shows trial status on mount and Active after Check now with a key", async () => {
+    const user = userEvent.setup();
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByRole("tab", { name: "License" }));
+    expect(await screen.findByText("Trial — 5 days left")).toBeInTheDocument();
+
+    // Enter and save a key, then force a check: the mock reports Active.
+    await user.type(screen.getByLabelText("License key"), "WHSPR-TEST-KEY");
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    await user.click(saveButton);
+    await waitFor(() => expect(saveButton).toBeDisabled());
+
+    await user.click(screen.getByRole("button", { name: "Check now" }));
+    expect(
+      await screen.findByText("Active until 2027-01-01"),
+    ).toBeInTheDocument();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

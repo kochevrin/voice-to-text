@@ -7,7 +7,7 @@ use std::sync::{Mutex, RwLock};
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_notification::NotificationExt;
-use whispr_core::Settings;
+use whispr_core::{LicenseState, Settings};
 
 use crate::recorder::RecorderHandle;
 use crate::tray;
@@ -57,6 +57,9 @@ pub struct AppState {
     pub phase: Mutex<Phase>,
     /// Model ids with a download currently in flight.
     pub downloads: Mutex<HashSet<String>>,
+    /// Last effective license state seen by a check, for once-per-transition
+    /// notifications.
+    pub license_state: Mutex<Option<LicenseState>>,
     /// Kept alive for the whole app lifetime: on X11 the clipboard contents
     /// are only served while the owning `Clipboard` instance exists.
     pub clipboard: Mutex<Option<arboard::Clipboard>>,
@@ -70,6 +73,7 @@ impl Default for AppState {
             recorder: Mutex::new(RecorderSlot::Idle),
             phase: Mutex::new(Phase::Idle),
             downloads: Mutex::new(HashSet::new()),
+            license_state: Mutex::new(None),
             clipboard: Mutex::new(None),
         }
     }

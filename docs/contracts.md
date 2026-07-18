@@ -33,10 +33,45 @@ TS mirror: `src/lib/types.ts` → `Settings`.
     "fallback_to_local": true
   },
   "history_enabled": true,
+  "license": { "key": "", "server_url": "" },
   "onboarding_done": false,
   "paused": false
 }
 ```
+
+### Licensing (`license`)
+
+Honor-system subscription gate. Rust struct `whispr_core::LicenseSettings`
+(per-field serde defaults). **When `server_url` is empty the whole licensing
+system is OFF** (state `disabled`, app fully functional — the open-source
+default). Distributors deploy the bundled Cloudflare Worker
+(`licensing/worker/`) and prefill/enter its URL.
+
+Server API: `GET {server_url}/check?key=<key>` →
+`{"active": bool, "expires": "YYYY-MM-DD" | null}` (HTTP 200 also for unknown
+keys, with `active: false`).
+
+Verdict logic (pure, `whispr_core::license::evaluate`):
+- `server_url` empty → `disabled`.
+- 7-day trial from first launch (`installed_at_ms`, stored in
+  `<app_data>/license.json`): while it lasts → `trial` (works).
+- Cached last successful server response: `active: true` → `active` (works,
+  stale cache OK indefinitely — offline keeps working); `active: false` →
+  `inactive` (**dictation blocked**: hotkey + test recording refuse with a
+  notification; UI/settings/history stay usable).
+- No cache, trial over, server unreachable → `unverified` (works — honor
+  system).
+Checks run at startup and hourly (tokio interval), plus on license settings
+change; cache persisted in `license.json` `{installed_at_ms, last: {active,
+expires, checked_at_ms}}`.
+
+Commands:
+| `get_license_status` | – | `LicenseStatus` | `{ state: "disabled"\|"trial"\|"active"\|"inactive"\|"unverified", trial_days_left: number\|null, expires: string\|null, last_checked_ms: number\|null }` |
+| `check_license_now` | – | `LicenseStatus` | Forces a server fetch, updates the cache, returns the fresh status. Errors (unreachable) still return a status (from cache/trial). |
+
+UI: Settings gains a "License" tab — key input, server URL input, status line,
+"Check now" button. Mock: state `trial` with 5 days left; `check_license_now`
+returns `active` when the mock key is non-empty, else `inactive`.
 
 `history_enabled`: when false, new transcriptions are NOT added to the in-app
 history (memory or disk); existing entries stay until "Clear history". The

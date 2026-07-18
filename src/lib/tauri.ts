@@ -9,6 +9,7 @@ import type {
   AppStateEvent,
   DiskUsage,
   HistoryEntry,
+  LicenseStatus,
   ModelDownloadProgress,
   ModelInfo,
   Settings,
@@ -45,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
     fallback_to_local: true,
   },
   history_enabled: true,
+  license: { key: "", server_url: "" },
   onboarding_done: false,
   paused: false,
 };
@@ -103,6 +105,7 @@ function mockReadSettings(): Settings {
       ...parsed,
       postproc: { ...defaults.postproc, ...(parsed.postproc ?? {}) },
       cloud: { ...defaults.cloud, ...(parsed.cloud ?? {}) },
+      license: { ...defaults.license, ...(parsed.license ?? {}) },
     };
   } catch {
     return defaults;
@@ -280,6 +283,27 @@ export function setPaused(paused: boolean): Promise<null> {
 export function openPermissionSettings(): Promise<null> {
   if (!isMock) return invoke<null>("open_permission_settings");
   return Promise.resolve(null);
+}
+
+export function getLicenseStatus(): Promise<LicenseStatus> {
+  if (!isMock) return invoke<LicenseStatus>("get_license_status");
+  return Promise.resolve({
+    state: "trial",
+    trial_days_left: 5,
+    expires: null,
+    last_checked_ms: null,
+  });
+}
+
+export function checkLicenseNow(): Promise<LicenseStatus> {
+  if (!isMock) return invoke<LicenseStatus>("check_license_now");
+  const active = mockReadSettings().license.key !== "";
+  return Promise.resolve({
+    state: active ? "active" : "inactive",
+    trial_days_left: null,
+    expires: active ? "2027-01-01" : null,
+    last_checked_ms: Date.now(),
+  });
 }
 
 export function openRepo(): Promise<null> {

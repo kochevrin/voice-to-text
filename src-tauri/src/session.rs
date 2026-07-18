@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter, Manager};
 
 use crate::recorder::{self, RecorderConfig, RecorderHandle};
 use crate::state::{self, AppState, Phase, RecorderSlot, TranscriptionPayload};
-use crate::{cloud, inject, pill, postproc, tray, whisper};
+use crate::{cloud, inject, license, pill, postproc, tray, whisper};
 
 /// Ignore takes shorter than this (accidental key taps): 0.15 s.
 const MIN_SAMPLES: usize = 2400;
@@ -96,8 +96,13 @@ fn finish_startup(app: &AppHandle, result: Result<RecorderHandle, String>) -> Re
 
 /// Starts a recording session from the hotkey/tray path without blocking the
 /// caller (opening the device can take seconds): startup failures surface as
-/// a notification + Phase::Error instead of a return value.
+/// a notification + Phase::Error instead of a return value. Refuses with a
+/// notification when the license is inactive (phase stays Idle).
 pub fn start_recording_detached(app: &AppHandle, test: bool) {
+    if let Err(message) = license::ensure_can_dictate(app) {
+        state::notify(app, "whispr-open", &message);
+        return;
+    }
     let Some(task) = spawn_startup(app, test) else {
         return;
     };
@@ -116,8 +121,13 @@ pub fn start_recording_detached(app: &AppHandle, test: bool) {
 
 /// Starts a recording session and waits for the device to be ready, returning
 /// the startup error (command path). No-ops when a session is already active
-/// or a transcription is in flight.
+/// or a transcription is in flight. Refuses with a notification + `Err` when
+/// the license is inactive (phase stays Idle).
 pub async fn start_recording(app: &AppHandle, test: bool) -> Result<(), String> {
+    if let Err(message) = license::ensure_can_dictate(app) {
+        state::notify(app, "whispr-open", &message);
+        return Err(message);
+    }
     let Some(task) = spawn_startup(app, test) else {
         return Ok(());
     };

@@ -4,6 +4,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::license::LicenseSettings;
+
 /// The 8 supported whisper.cpp model ids.
 pub const MODEL_IDS: &[&str] = &[
     "tiny", "tiny.en", "base", "base.en", "small", "small.en", "medium", "medium.en",
@@ -94,6 +96,8 @@ pub struct Settings {
     #[serde(default = "default_true")]
     pub history_enabled: bool,
     #[serde(default)]
+    pub license: LicenseSettings,
+    #[serde(default)]
     pub onboarding_done: bool,
     #[serde(default)]
     pub paused: bool,
@@ -113,6 +117,7 @@ impl Default for Settings {
             postproc: PostprocSettings::default(),
             cloud: CloudSettings::default(),
             history_enabled: true,
+            license: LicenseSettings::default(),
             onboarding_done: false,
             paused: false,
         }
@@ -232,6 +237,10 @@ mod tests {
         assert_eq!(c.api_key, "");
         assert_eq!(c.model, "whisper-large-v3-turbo");
         assert!(c.fallback_to_local);
+
+        let l = s.license;
+        assert_eq!(l.key, "");
+        assert_eq!(l.server_url, "");
     }
 
     #[test]
@@ -244,6 +253,8 @@ mod tests {
         s.cloud.api_key = "gsk_test".to_string();
         s.cloud.fallback_to_local = false;
         s.history_enabled = false;
+        s.license.key = "WSPR-TEST-KEY".to_string();
+        s.license.server_url = "https://license.example.com".to_string();
         let json = serde_json::to_string(&s).unwrap();
         let back: Settings = serde_json::from_str(&json).unwrap();
         assert_eq!(back, s);
@@ -273,6 +284,8 @@ mod tests {
         assert_eq!(s.cloud, CloudSettings::default());
         // A pre-history_enabled settings.json keeps history on.
         assert!(s.history_enabled);
+        // A pre-license settings.json gets the license defaults (licensing off).
+        assert_eq!(s.license, LicenseSettings::default());
     }
 
     #[test]
@@ -292,6 +305,13 @@ mod tests {
         assert_eq!(s.cloud.base_url, "https://api.groq.com/openai/v1");
         assert_eq!(s.cloud.model, "whisper-large-v3-turbo");
         assert!(s.cloud.fallback_to_local);
+    }
+
+    #[test]
+    fn partial_license_fills_missing_fields_with_defaults() {
+        let s: Settings = serde_json::from_str(r#"{"license":{"key":"WSPR-1"}}"#).unwrap();
+        assert_eq!(s.license.key, "WSPR-1");
+        assert_eq!(s.license.server_url, "");
     }
 
     #[test]
@@ -324,6 +344,7 @@ mod tests {
             "postproc",
             "cloud",
             "history_enabled",
+            "license",
             "onboarding_done",
             "paused",
         ] {
@@ -334,6 +355,9 @@ mod tests {
         }
         for key in ["enabled", "base_url", "api_key", "model", "fallback_to_local"] {
             assert!(json["cloud"].get(key).is_some(), "missing cloud key {key}");
+        }
+        for key in ["key", "server_url"] {
+            assert!(json["license"].get(key).is_some(), "missing license key {key}");
         }
     }
 
