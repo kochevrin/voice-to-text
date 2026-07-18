@@ -28,6 +28,15 @@ pub fn run() {
         .try_init();
 
     tauri::Builder::default()
+        // Must be the first plugin: a second launch exits immediately and
+        // focuses the existing instance instead of fighting for the hotkey.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.unminimize();
+                let _ = window.set_focus();
+            }
+        }))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_handler(|app, _shortcut, event| {
