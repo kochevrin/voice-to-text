@@ -17,7 +17,7 @@ import { copyText, getLicenseStatus, openUrl, setPaused } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 /** The author's profile rather than the repository — the repo may go private. */
-const AUTHOR_URL = "https://github.com/kochevrin";
+const REPO_URL = "https://github.com/kochevrin/voice-to-text";
 
 /** Quiet countdown for the header: the trial, or a subscription about to
  * lapse. Nothing when licensing is off or the key is comfortably active. */
@@ -181,7 +181,7 @@ export function Home({ onOpenSettings }: HomeProps) {
         {t("home.footer.by")} Konstantin Kochevrin ·{" "}
         <button
           type="button"
-          onClick={() => void openUrl(AUTHOR_URL)}
+          onClick={() => void openUrl(REPO_URL)}
           className="underline underline-offset-2 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
         >
           GitHub
