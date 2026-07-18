@@ -90,6 +90,9 @@ pub struct Settings {
     pub postproc: PostprocSettings,
     #[serde(default)]
     pub cloud: CloudSettings,
+    /// When false, new transcriptions are not added to history.
+    #[serde(default = "default_true")]
+    pub history_enabled: bool,
     #[serde(default)]
     pub onboarding_done: bool,
     #[serde(default)]
@@ -109,6 +112,7 @@ impl Default for Settings {
             pill_enabled: true,
             postproc: PostprocSettings::default(),
             cloud: CloudSettings::default(),
+            history_enabled: true,
             onboarding_done: false,
             paused: false,
         }
@@ -209,6 +213,7 @@ mod tests {
         assert_eq!(s.silence_timeout_ms, 800);
         assert!(s.vad_enabled);
         assert!(s.pill_enabled);
+        assert!(s.history_enabled);
         assert!(!s.onboarding_done);
         assert!(!s.paused);
 
@@ -238,6 +243,7 @@ mod tests {
         s.cloud.enabled = true;
         s.cloud.api_key = "gsk_test".to_string();
         s.cloud.fallback_to_local = false;
+        s.history_enabled = false;
         let json = serde_json::to_string(&s).unwrap();
         let back: Settings = serde_json::from_str(&json).unwrap();
         assert_eq!(back, s);
@@ -265,6 +271,8 @@ mod tests {
         assert_eq!(s.postproc, PostprocSettings::default());
         // A pre-cloud settings.json (no "cloud" key) gets the cloud defaults.
         assert_eq!(s.cloud, CloudSettings::default());
+        // A pre-history_enabled settings.json keeps history on.
+        assert!(s.history_enabled);
     }
 
     #[test]
@@ -315,6 +323,7 @@ mod tests {
             "pill_enabled",
             "postproc",
             "cloud",
+            "history_enabled",
             "onboarding_done",
             "paused",
         ] {

@@ -29,6 +29,7 @@ export interface Settings {
   pill_enabled: boolean;
   postproc: PostprocSettings;
   cloud: CloudSettings;
+  history_enabled: boolean;
   onboarding_done: boolean;
   paused: boolean;
 }

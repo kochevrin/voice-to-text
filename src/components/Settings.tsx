@@ -163,7 +163,7 @@ export function Settings({ onClose }: SettingsProps) {
         </TabsContent>
 
         <TabsContent value="privacy" className="mt-4 flex-1 space-y-5 overflow-y-auto">
-          <PrivacyTab draft={draft} />
+          <PrivacyTab draft={draft} update={update} />
         </TabsContent>
       </Tabs>
     </div>
@@ -556,7 +556,7 @@ function PostprocTab({ draft, update }: TabProps) {
   );
 }
 
-function PrivacyTab({ draft }: { draft: SettingsType }) {
+function PrivacyTab({ draft, update }: TabProps) {
   const [modelsBytes, setModelsBytes] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -576,6 +576,20 @@ function PrivacyTab({ draft }: { draft: SettingsType }) {
           <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
           100% local — audio never leaves this device
         </div>
+      )}
+
+      <div className="flex items-center justify-between">
+        <Label htmlFor="history-enabled">Save transcription history</Label>
+        <Switch
+          id="history-enabled"
+          checked={draft.history_enabled}
+          onCheckedChange={(history_enabled) => update({ history_enabled })}
+        />
+      </div>
+      {!draft.history_enabled && (
+        <p className="text-xs text-muted-foreground">
+          New transcriptions won&apos;t be kept in history.
+        </p>
       )}
 
       <p className="text-sm text-muted-foreground">

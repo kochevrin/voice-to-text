@@ -99,6 +99,40 @@ describe("Settings (mock mode)", () => {
     expect(screen.getByLabelText("API key")).toHaveValue("gsk_test_123");
   });
 
+  it("persists history_enabled=false across remount and shows the hint", async () => {
+    const user = userEvent.setup();
+    const first = render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByRole("tab", { name: "Privacy" }));
+    const historyToggle = screen.getByRole("switch", {
+      name: "Save transcription history",
+    });
+    expect(historyToggle).toBeChecked();
+    await user.click(historyToggle);
+    expect(historyToggle).not.toBeChecked();
+    expect(
+      screen.getByText(/New transcriptions won't be kept/),
+    ).toBeInTheDocument();
+
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    await user.click(saveButton);
+    await waitFor(() => expect(saveButton).toBeDisabled());
+    expect(
+      JSON.parse(localStorage.getItem("whispr-mock-settings") ?? "{}"),
+    ).toMatchObject({ history_enabled: false });
+
+    first.unmount();
+
+    // Fresh mount reads the persisted flag from the mock backend.
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+    await user.click(screen.getByRole("tab", { name: "Privacy" }));
+    expect(
+      screen.getByRole("switch", { name: "Save transcription history" }),
+    ).not.toBeChecked();
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

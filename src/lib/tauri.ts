@@ -44,6 +44,7 @@ export const DEFAULT_SETTINGS: Settings = {
     model: "whisper-large-v3-turbo",
     fallback_to_local: true,
   },
+  history_enabled: true,
   onboarding_done: false,
   paused: false,
 };
@@ -122,6 +123,7 @@ function mockReadHistory(): HistoryEntry[] {
 }
 
 function mockPushHistory(text: string): void {
+  if (!mockReadSettings().history_enabled) return;
   const next = [{ text, ts_ms: Date.now() }, ...mockReadHistory()].slice(0, 20);
   localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
 }

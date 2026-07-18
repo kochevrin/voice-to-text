@@ -32,10 +32,15 @@ TS mirror: `src/lib/types.ts` → `Settings`.
     "model": "whisper-large-v3-turbo",
     "fallback_to_local": true
   },
+  "history_enabled": true,
   "onboarding_done": false,
   "paused": false
 }
 ```
+
+`history_enabled`: when false, new transcriptions are NOT added to the in-app
+history (memory or disk); existing entries stay until "Clear history". The
+Privacy tab exposes the switch.
 
 ### Cloud transcription (`cloud`)
 

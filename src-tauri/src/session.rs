@@ -209,7 +209,7 @@ pub async fn finish_recording(app: AppHandle) {
         false
     };
 
-    if !text.is_empty() {
+    if !text.is_empty() && settings.history_enabled {
         let state = app.state::<AppState>();
         let snapshot = {
             let mut history = state.history.lock().unwrap();
