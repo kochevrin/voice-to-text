@@ -160,5 +160,10 @@ pub async fn open_permission_settings() -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
     }
+    #[cfg(target_os = "windows")]
+    {
+        tauri_plugin_opener::open_url("ms-settings:privacy-microphone", None::<&str>)
+            .map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
