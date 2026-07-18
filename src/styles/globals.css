@@ -1,0 +1,75 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 20% 10%;
+    --card: 0 0% 100%;
+    --card-foreground: 224 20% 10%;
+    --primary: 172 60% 30%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 220 14% 94%;
+    --secondary-foreground: 224 20% 12%;
+    --muted: 220 14% 94%;
+    --muted-foreground: 224 8% 42%;
+    --accent: 220 14% 92%;
+    --accent-foreground: 224 20% 12%;
+    --destructive: 0 72% 44%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 220 13% 88%;
+    --input: 220 13% 84%;
+    --ring: 172 60% 34%;
+    --radius: 0.6rem;
+  }
+
+  .dark {
+    --background: 225 15% 7%;
+    --foreground: 220 14% 90%;
+    --card: 225 15% 10%;
+    --card-foreground: 220 14% 90%;
+    --primary: 172 55% 45%;
+    --primary-foreground: 226 20% 8%;
+    --secondary: 225 12% 16%;
+    --secondary-foreground: 220 14% 88%;
+    --muted: 225 12% 15%;
+    --muted-foreground: 222 8% 58%;
+    --accent: 225 12% 18%;
+    --accent-foreground: 220 14% 90%;
+    --destructive: 0 62% 48%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 225 12% 19%;
+    --input: 225 12% 22%;
+    --ring: 172 55% 45%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      "Segoe UI",
+      Roboto,
+      "Helvetica Neue",
+      Arial,
+      sans-serif;
+  }
+
+  /* The pill window route renders on a fully transparent page. */
+  html.pill-route,
+  html.pill-route body {
+    background: transparent !important;
+  }
+}
