@@ -95,7 +95,7 @@ export function Onboarding({ settings, onComplete }: OnboardingProps) {
   return (
     <div className="mx-auto flex h-full w-full max-w-md flex-col p-6">
       <div className="mb-6 flex items-center gap-3">
-        <img src={logo} alt="" className="h-5 w-5 rounded" />
+        <img src={logo} alt="" className="h-5 w-5 rounded-full" />
         <h1 className="text-lg font-semibold">Welcome to whispr-open</h1>
       </div>
 

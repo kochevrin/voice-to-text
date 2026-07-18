@@ -37,7 +37,7 @@ export function Home({ onOpenSettings }: HomeProps) {
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-3 border-b px-4 py-3">
-        <img src={logo} alt="" className="h-5 w-5 rounded" />
+        <img src={logo} alt="" className="h-5 w-5 rounded-full" />
         <h1 className="text-base font-semibold">whispr-open</h1>
         <StateChip state={app} />
         {settings?.paused && (
