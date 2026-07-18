@@ -33,6 +33,34 @@ impl Default for PostprocSettings {
     }
 }
 
+/// Optional OpenAI-compatible cloud transcription (Groq, OpenAI, any
+/// compatible server).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CloudSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_cloud_base_url")]
+    pub base_url: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default = "default_cloud_model")]
+    pub model: String,
+    #[serde(default = "default_true")]
+    pub fallback_to_local: bool,
+}
+
+impl Default for CloudSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            base_url: default_cloud_base_url(),
+            api_key: String::new(),
+            model: default_cloud_model(),
+            fallback_to_local: true,
+        }
+    }
+}
+
 /// Application settings. Every field has a serde default so partial or
 /// outdated JSON deserializes to the documented defaults.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -61,6 +89,8 @@ pub struct Settings {
     #[serde(default)]
     pub postproc: PostprocSettings,
     #[serde(default)]
+    pub cloud: CloudSettings,
+    #[serde(default)]
     pub onboarding_done: bool,
     #[serde(default)]
     pub paused: bool,
@@ -78,6 +108,7 @@ impl Default for Settings {
             vad_enabled: true,
             pill_enabled: true,
             postproc: PostprocSettings::default(),
+            cloud: CloudSettings::default(),
             onboarding_done: false,
             paused: false,
         }
@@ -118,6 +149,14 @@ fn default_postproc_model() -> String {
 
 fn default_postproc_prompt() -> String {
     "Fix grammar and punctuation. Preserve meaning. Output ONLY the corrected text.".to_string()
+}
+
+fn default_cloud_base_url() -> String {
+    "https://api.groq.com/openai/v1".to_string()
+}
+
+fn default_cloud_model() -> String {
+    "whisper-large-v3-turbo".to_string()
 }
 
 /// Resolve the model id actually used for transcription given the configured
@@ -181,6 +220,13 @@ mod tests {
             p.prompt,
             "Fix grammar and punctuation. Preserve meaning. Output ONLY the corrected text."
         );
+
+        let c = s.cloud;
+        assert!(!c.enabled);
+        assert_eq!(c.base_url, "https://api.groq.com/openai/v1");
+        assert_eq!(c.api_key, "");
+        assert_eq!(c.model, "whisper-large-v3-turbo");
+        assert!(c.fallback_to_local);
     }
 
     #[test]
@@ -189,6 +235,9 @@ mod tests {
         s.hotkey = "Ctrl+Shift+D".to_string();
         s.input_device = Some("USB Mic".to_string());
         s.postproc.enabled = true;
+        s.cloud.enabled = true;
+        s.cloud.api_key = "gsk_test".to_string();
+        s.cloud.fallback_to_local = false;
         let json = serde_json::to_string(&s).unwrap();
         let back: Settings = serde_json::from_str(&json).unwrap();
         assert_eq!(back, s);
@@ -214,6 +263,8 @@ mod tests {
         assert!(s.vad_enabled);
         assert!(s.pill_enabled);
         assert_eq!(s.postproc, PostprocSettings::default());
+        // A pre-cloud settings.json (no "cloud" key) gets the cloud defaults.
+        assert_eq!(s.cloud, CloudSettings::default());
     }
 
     #[test]
@@ -222,6 +273,17 @@ mod tests {
         assert!(s.postproc.enabled);
         assert_eq!(s.postproc.ollama_url, "http://localhost:11434");
         assert_eq!(s.postproc.model, "llama3.2:3b");
+    }
+
+    #[test]
+    fn partial_cloud_fills_missing_fields_with_defaults() {
+        let s: Settings =
+            serde_json::from_str(r#"{"cloud":{"enabled":true,"api_key":"sk-x"}}"#).unwrap();
+        assert!(s.cloud.enabled);
+        assert_eq!(s.cloud.api_key, "sk-x");
+        assert_eq!(s.cloud.base_url, "https://api.groq.com/openai/v1");
+        assert_eq!(s.cloud.model, "whisper-large-v3-turbo");
+        assert!(s.cloud.fallback_to_local);
     }
 
     #[test]
@@ -252,6 +314,7 @@ mod tests {
             "vad_enabled",
             "pill_enabled",
             "postproc",
+            "cloud",
             "onboarding_done",
             "paused",
         ] {
@@ -259,6 +322,9 @@ mod tests {
         }
         for key in ["enabled", "ollama_url", "model", "prompt"] {
             assert!(json["postproc"].get(key).is_some(), "missing postproc key {key}");
+        }
+        for key in ["enabled", "base_url", "api_key", "model", "fallback_to_local"] {
+            assert!(json["cloud"].get(key).is_some(), "missing cloud key {key}");
         }
     }
 

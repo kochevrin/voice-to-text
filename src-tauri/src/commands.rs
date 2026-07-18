@@ -7,7 +7,7 @@ use whispr_core::{normalize_hotkey, HotkeyError, Settings, MODEL_IDS};
 
 use crate::models::{self, DiskUsage, ModelInfo};
 use crate::state::{self, AppState, HistoryEntry};
-use crate::{audio, hotkeys, postproc, session, tray, whisper};
+use crate::{audio, hotkeys, postproc, session, tray};
 
 fn hotkey_error_message(err: HotkeyError) -> String {
     match err {
@@ -94,7 +94,7 @@ pub async fn transcribe_wav(app: AppHandle, path: String) -> Result<String, Stri
     if !wav.is_file() {
         return Err(format!("no such file: {}", wav.display()));
     }
-    let raw = whisper::transcribe(&app, &wav).await?;
+    let raw = session::transcribe(&app, &wav).await?;
     let settings = state::current_settings(&app);
     Ok(postproc::apply(&settings.postproc, &raw).await)
 }

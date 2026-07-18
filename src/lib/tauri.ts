@@ -37,6 +37,13 @@ export const DEFAULT_SETTINGS: Settings = {
     prompt:
       "Fix grammar and punctuation. Preserve meaning. Output ONLY the corrected text.",
   },
+  cloud: {
+    enabled: false,
+    base_url: "https://api.groq.com/openai/v1",
+    api_key: "",
+    model: "whisper-large-v3-turbo",
+    fallback_to_local: true,
+  },
   onboarding_done: false,
   paused: false,
 };
@@ -94,6 +101,7 @@ function mockReadSettings(): Settings {
       ...defaults,
       ...parsed,
       postproc: { ...defaults.postproc, ...(parsed.postproc ?? {}) },
+      cloud: { ...defaults.cloud, ...(parsed.cloud ?? {}) },
     };
   } catch {
     return defaults;

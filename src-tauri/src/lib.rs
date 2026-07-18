@@ -1,6 +1,7 @@
 //! whispr-open — cross-platform push-to-talk dictation (Tauri v2 backend).
 
 mod audio;
+mod cloud;
 mod commands;
 mod hotkeys;
 mod inject;

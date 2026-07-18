@@ -44,6 +44,21 @@ import { cn, formatBytes } from "@/lib/utils";
 
 const DEFAULT_DEVICE = "__default__";
 
+const CLOUD_PRESETS = [
+  {
+    value: "groq",
+    label: "Groq",
+    base_url: "https://api.groq.com/openai/v1",
+    model: "whisper-large-v3-turbo",
+  },
+  {
+    value: "openai",
+    label: "OpenAI",
+    base_url: "https://api.openai.com/v1",
+    model: "whisper-1",
+  },
+] as const;
+
 const LANGUAGES: { value: string; label: string }[] = [
   { value: "auto", label: "Auto-detect" },
   { value: "en", label: "English" },
@@ -148,7 +163,7 @@ export function Settings({ onClose }: SettingsProps) {
         </TabsContent>
 
         <TabsContent value="privacy" className="mt-4 flex-1 space-y-5 overflow-y-auto">
-          <PrivacyTab />
+          <PrivacyTab draft={draft} />
         </TabsContent>
       </Tabs>
     </div>
@@ -273,6 +288,14 @@ function TranscriptionTab({ draft, update }: TabProps) {
   );
   const [downloadError, setDownloadError] = useState<string | null>(null);
 
+  const updateCloud = (patch: Partial<SettingsType["cloud"]>) => {
+    update({ cloud: { ...draft.cloud, ...patch } });
+  };
+
+  const cloudPreset =
+    CLOUD_PRESETS.find((p) => p.base_url === draft.cloud.base_url)?.value ??
+    "custom";
+
   const refresh = () => void listModels().then(setModels);
 
   useEffect(() => {
@@ -396,6 +419,87 @@ function TranscriptionTab({ draft, update }: TabProps) {
           fall back to the multilingual variant.
         </p>
       </div>
+
+      <div className="space-y-5 border-t pt-5">
+        <div className="flex items-center justify-between">
+          <Label htmlFor="cloud-enabled">Cloud transcription</Label>
+          <Switch
+            id="cloud-enabled"
+            checked={draft.cloud.enabled}
+            onCheckedChange={(enabled) => updateCloud({ enabled })}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="cloud-provider">Provider</Label>
+          <Select
+            value={cloudPreset}
+            onValueChange={(v) => {
+              const preset = CLOUD_PRESETS.find((p) => p.value === v);
+              if (preset)
+                updateCloud({ base_url: preset.base_url, model: preset.model });
+            }}
+          >
+            <SelectTrigger id="cloud-provider">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {CLOUD_PRESETS.map((p) => (
+                <SelectItem key={p.value} value={p.value}>
+                  {p.label}
+                </SelectItem>
+              ))}
+              <SelectItem value="custom">Custom</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="cloud-base-url">Base URL</Label>
+          <Input
+            id="cloud-base-url"
+            value={draft.cloud.base_url}
+            onChange={(e) => updateCloud({ base_url: e.target.value })}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="cloud-api-key">API key</Label>
+          <Input
+            id="cloud-api-key"
+            type="password"
+            aria-label="API key"
+            value={draft.cloud.api_key}
+            onChange={(e) => updateCloud({ api_key: e.target.value })}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="cloud-model">Model</Label>
+          <Input
+            id="cloud-model"
+            value={draft.cloud.model}
+            onChange={(e) => updateCloud({ model: e.target.value })}
+          />
+        </div>
+
+        <div className="flex items-center justify-between">
+          <Label htmlFor="cloud-fallback">Fall back to local on failure</Label>
+          <Switch
+            id="cloud-fallback"
+            checked={draft.cloud.fallback_to_local}
+            onCheckedChange={(fallback_to_local) =>
+              updateCloud({ fallback_to_local })
+            }
+          />
+        </div>
+
+        <p className="text-xs text-muted-foreground">
+          The API key is stored in plain text in the local settings file. While
+          cloud transcription is enabled, recorded audio is uploaded to the
+          server above.
+        </p>
+      </div>
     </>
   );
 }
@@ -452,7 +556,7 @@ function PostprocTab({ draft, update }: TabProps) {
   );
 }
 
-function PrivacyTab() {
+function PrivacyTab({ draft }: { draft: SettingsType }) {
   const [modelsBytes, setModelsBytes] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -462,10 +566,17 @@ function PrivacyTab() {
 
   return (
     <>
-      <div className="flex items-center gap-2 rounded-md border border-emerald-600/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500 dark:text-emerald-400">
-        <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-        100% local — audio never leaves this device
-      </div>
+      {draft.cloud.enabled ? (
+        <div className="flex items-center gap-2 rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-500 dark:text-amber-400">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
+          Cloud transcription on — audio is sent to {draft.cloud.base_url}
+        </div>
+      ) : (
+        <div className="flex items-center gap-2 rounded-md border border-emerald-600/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500 dark:text-emerald-400">
+          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+          100% local — audio never leaves this device
+        </div>
+      )}
 
       <p className="text-sm text-muted-foreground">
         Models on disk:{" "}

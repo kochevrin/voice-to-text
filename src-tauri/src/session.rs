@@ -1,11 +1,13 @@
 //! Recording flow orchestration: start → capture → transcribe → post-process
 //! → inject → history/event, shared by hotkeys, tray and commands.
 
+use std::path::Path;
+
 use tauri::{AppHandle, Emitter, Manager};
 
 use crate::recorder::{self, RecorderConfig, RecorderHandle};
 use crate::state::{self, AppState, Phase, RecorderSlot, TranscriptionPayload};
-use crate::{inject, pill, postproc, tray, whisper};
+use crate::{cloud, inject, pill, postproc, tray, whisper};
 
 /// Ignore takes shorter than this (accidental key taps): 0.15 s.
 const MIN_SAMPLES: usize = 2400;
@@ -186,7 +188,7 @@ pub async fn finish_recording(app: AppHandle) {
         }
     }
 
-    let transcript = whisper::transcribe(&app, &wav).await;
+    let transcript = transcribe(&app, &wav).await;
     let _ = tokio::fs::remove_file(&wav).await;
 
     let raw = match transcript {
@@ -228,6 +230,23 @@ pub async fn finish_recording(app: AppHandle) {
 
     emit_transcription(&app, text, injected);
     state::set_phase(&app, Phase::Idle, None);
+}
+
+/// Transcription dispatcher: cloud API when enabled and an API key is set,
+/// otherwise (or as fallback on cloud failure) the local whisper sidecar.
+/// Used by both the recording pipeline and the `transcribe_wav` command.
+pub async fn transcribe(app: &AppHandle, wav: &Path) -> Result<String, String> {
+    let settings = state::current_settings(app);
+    if settings.cloud.enabled && !settings.cloud.api_key.trim().is_empty() {
+        match cloud::transcribe(&settings, wav).await {
+            Ok(text) => return Ok(text),
+            Err(e) if settings.cloud.fallback_to_local => {
+                tracing::warn!("cloud transcription failed ({e}); falling back to local whisper");
+            }
+            Err(e) => return Err(e),
+        }
+    }
+    whisper::transcribe(app, wav).await
 }
 
 async fn fail(app: &AppHandle, message: String) {

@@ -22,6 +22,10 @@ Flow: no cloud, no subscription, your audio never leaves the machine.
 - **Voice activity detection** — recording stops automatically after silence
 - **Optional post-processing** through a local [Ollama](https://ollama.com)
   model (grammar/punctuation cleanup, fully configurable prompt)
+- **Optional cloud transcription** via any OpenAI-compatible API (presets for
+  [Groq](https://console.groq.com) — generous free tier, very fast
+  `whisper-large-v3-turbo` — and OpenAI), with automatic fallback to the local
+  engine; off by default
 - **On-screen pill** indicator, transcription history (last 20), pause mode,
   in-app model downloads
 - Linux (X11 + Wayland), macOS (universal), Windows
@@ -95,6 +99,18 @@ removed later in Settings.
 
 OS permissions (microphone, macOS Accessibility, Wayland ydotool setup) are
 documented in [`docs/permissions.md`](docs/permissions.md).
+
+### Cloud transcription (optional)
+
+Settings → Transcription → **Cloud transcription**: pick a preset (Groq /
+OpenAI / Custom), paste your API key, enable the switch. Recorded audio is then
+uploaded to `{base_url}/audio/transcriptions` instead of running the local
+model — with Groq's `whisper-large-v3-turbo` this is usually much faster than
+local CPU inference, and Groq offers a free tier (get a key at
+[console.groq.com](https://console.groq.com/keys)). On any network/API error
+the app silently falls back to the local engine (configurable). Privacy trade-
+off is surfaced in the Privacy tab: while enabled, audio leaves your device;
+the API key is stored in plain text in your local `settings.json`.
 
 ## App data paths
 

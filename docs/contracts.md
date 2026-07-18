@@ -25,10 +25,40 @@ TS mirror: `src/lib/types.ts` → `Settings`.
     "model": "llama3.2:3b",
     "prompt": "Fix grammar and punctuation. Preserve meaning. Output ONLY the corrected text."
   },
+  "cloud": {
+    "enabled": false,
+    "base_url": "https://api.groq.com/openai/v1",
+    "api_key": "",
+    "model": "whisper-large-v3-turbo",
+    "fallback_to_local": true
+  },
   "onboarding_done": false,
   "paused": false
 }
 ```
+
+### Cloud transcription (`cloud`)
+
+Optional OpenAI-compatible remote transcription (Groq, OpenAI, any compatible
+server). Rust struct `whispr_core::CloudSettings`, per-field serde defaults as
+above so pre-cloud settings files still deserialize.
+
+Behavior (Rust side, in the transcription step): when `cloud.enabled` and
+`api_key` is non-empty, POST `{base_url}/audio/transcriptions` as
+`multipart/form-data` — `file` (the recorded WAV, filename `audio.wav`),
+`model`, `response_format=json`, plus `language` unless it is `"auto"` — with
+header `Authorization: Bearer {api_key}` and a 30 s timeout; parse `{"text"}`.
+On ANY failure: if `fallback_to_local` → `tracing::warn!` and run the local
+whisper path (silent fallback, same pattern as postproc); else the error
+surfaces as the usual error state/notification. Post-processing (Ollama) still
+applies to cloud results. The API key is stored in plain text in
+`settings.json` — the UI must say so.
+
+UI: Transcription tab gets a "Cloud transcription" section (enable switch,
+provider preset select Groq/OpenAI/Custom that fills `base_url` + default
+`model`, api-key password input, model input, fallback switch). The Privacy
+tab's local-only indicator turns amber with "audio is sent to {base_url}" when
+cloud is enabled.
 
 Rules:
 - If `language` is a concrete non-English code (not `"en"` and not `"auto"`) and

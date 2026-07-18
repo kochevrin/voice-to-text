@@ -54,6 +54,51 @@ describe("Settings (mock mode)", () => {
     ).toBeChecked();
   });
 
+  it("persists cloud settings across remount and flips the privacy indicator", async () => {
+    const user = userEvent.setup();
+    const first = render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    // Privacy starts green while cloud is off.
+    await user.click(screen.getByRole("tab", { name: "Privacy" }));
+    expect(screen.getByText(/100% local/)).toBeInTheDocument();
+
+    // Enable cloud and type an API key on the Transcription tab.
+    await user.click(screen.getByRole("tab", { name: "Transcription" }));
+    const cloudToggle = screen.getByRole("switch", {
+      name: "Cloud transcription",
+    });
+    expect(cloudToggle).not.toBeChecked();
+    await user.click(cloudToggle);
+    expect(cloudToggle).toBeChecked();
+    await user.type(screen.getByLabelText("API key"), "gsk_test_123");
+
+    // Privacy indicator turns amber with the target base_url.
+    await user.click(screen.getByRole("tab", { name: "Privacy" }));
+    expect(
+      screen.getByText(/audio is sent to https:\/\/api\.groq\.com\/openai\/v1/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/100% local/)).not.toBeInTheDocument();
+
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    await user.click(saveButton);
+    await waitFor(() => expect(saveButton).toBeDisabled());
+    expect(localStorage.getItem("whispr-mock-settings")).toContain(
+      "gsk_test_123",
+    );
+
+    first.unmount();
+
+    // Fresh mount reads persisted cloud settings from the mock backend.
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+    await user.click(screen.getByRole("tab", { name: "Transcription" }));
+    expect(
+      screen.getByRole("switch", { name: "Cloud transcription" }),
+    ).toBeChecked();
+    expect(screen.getByLabelText("API key")).toHaveValue("gsk_test_123");
+  });
+
   afterEach(() => {
     vi.restoreAllMocks();
   });

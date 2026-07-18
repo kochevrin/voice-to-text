@@ -10,6 +10,14 @@ export interface PostprocSettings {
   prompt: string;
 }
 
+export interface CloudSettings {
+  enabled: boolean;
+  base_url: string;
+  api_key: string;
+  model: string;
+  fallback_to_local: boolean;
+}
+
 export interface Settings {
   hotkey: string;
   hotkey_mode: HotkeyMode;
@@ -20,6 +28,7 @@ export interface Settings {
   vad_enabled: boolean;
   pill_enabled: boolean;
   postproc: PostprocSettings;
+  cloud: CloudSettings;
   onboarding_done: boolean;
   paused: boolean;
 }
