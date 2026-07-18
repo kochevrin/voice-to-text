@@ -15,6 +15,9 @@ src-tauri/binaries/*
 sidecar/whisper/vendor/
 *.bin
 
+# Wrangler (licensing worker) local state
+.wrangler/
+
 # Test artifacts
 e2e/test-results/
 playwright-report/
