@@ -1,0 +1,43 @@
+[package]
+name = "whispr-open"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Cross-platform push-to-talk dictation tool"
+
+[lib]
+name = "whispr_open_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+whispr-core = { path = "../crates/whispr-core" }
+tauri = { version = "2", features = ["tray-icon", "image-png", "macos-private-api"] }
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-notification = "2"
+tauri-plugin-opener = "2"
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+anyhow = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "process", "fs", "io-util"] }
+cpal = "0.15"
+webrtc-vad = "0.4"
+hound = "3.5"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "stream"] }
+futures-util = "0.3"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+dirs = "5"
+arboard = "3"
+
+[target.'cfg(target_os = "linux")'.dependencies]
+enigo = "0.2"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+core-graphics = "0.24"
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { version = "0.58", features = ["Win32_UI_Input_KeyboardAndMouse", "Win32_Foundation"] }

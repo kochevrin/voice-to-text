@@ -1,0 +1,25 @@
+# Node
+node_modules/
+dist/
+*.local
+
+# Rust
+target/
+
+# Tauri
+src-tauri/gen/
+src-tauri/binaries/*
+!src-tauri/binaries/.gitkeep
+
+# Whisper vendor checkouts and models
+sidecar/whisper/vendor/
+*.bin
+
+# Test artifacts
+e2e/test-results/
+playwright-report/
+coverage/
+
+# OS
+.DS_Store
+Thumbs.db
