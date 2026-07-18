@@ -33,4 +33,20 @@ describe("App (mock mode)", () => {
     await user.click(screen.getByRole("button", { name: "Back" }));
     expect(await screen.findByText("No transcriptions yet.")).toBeInTheDocument();
   });
+
+  it("makes the paused state unmistakable on Home", async () => {
+    localStorage.setItem(
+      "whispr-mock-settings",
+      JSON.stringify({ ...DEFAULT_SETTINGS, onboarding_done: true, paused: true }),
+    );
+    render(<App />);
+
+    expect(await screen.findByText("Paused")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Dictation is paused — the hotkey does nothing/),
+    ).toBeInTheDocument();
+
+    const toggle = screen.getByRole("switch", { name: "Pause dictation" });
+    expect(toggle).toBeChecked();
+  });
 });

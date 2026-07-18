@@ -12,6 +12,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { displayHotkey, isMacPlatform } from "@/lib/hotkey";
 import type { HistoryEntry } from "@/lib/types";
 import { copyText, setPaused } from "@/lib/tauri";
+import { cn } from "@/lib/utils";
 
 interface HomeProps {
   onOpenSettings: () => void;
@@ -38,6 +39,11 @@ export function Home({ onOpenSettings }: HomeProps) {
         <Mic className="h-4 w-4 text-primary" />
         <h1 className="text-base font-semibold">whispr-open</h1>
         <StateChip state={app} />
+        {settings?.paused && (
+          <span className="rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-500">
+            Paused
+          </span>
+        )}
         <div className="ml-auto">
           <Button
             variant="ghost"
@@ -61,10 +67,23 @@ export function Home({ onOpenSettings }: HomeProps) {
           </p>
         )}
 
-        <div className="flex items-center justify-between rounded-md border px-3 py-2">
-          <Label htmlFor="pause-toggle" className="text-sm">
-            Pause dictation
-          </Label>
+        <div
+          className={cn(
+            "flex items-center justify-between rounded-md border px-3 py-2",
+            settings?.paused && "border-amber-500/50 bg-amber-500/10",
+          )}
+        >
+          <div className="space-y-0.5">
+            <Label htmlFor="pause-toggle" className="text-sm">
+              Pause dictation
+            </Label>
+            {settings?.paused && (
+              <p className="text-xs text-amber-500">
+                Dictation is paused — the hotkey does nothing. Turn this off to
+                dictate.
+              </p>
+            )}
+          </div>
           <Switch
             id="pause-toggle"
             checked={settings?.paused ?? false}
