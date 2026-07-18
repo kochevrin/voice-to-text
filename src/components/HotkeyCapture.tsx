@@ -1,6 +1,7 @@
 import type { KeyboardEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { displayHotkey, isMacPlatform, keyEventToCombo } from "@/lib/hotkey";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
 interface HotkeyCaptureProps {
@@ -12,6 +13,7 @@ interface HotkeyCaptureProps {
 
 /** Read-only input that captures a key combo on keydown. */
 export function HotkeyCapture({ id, value, onChange, className }: HotkeyCaptureProps) {
+  const t = useT();
   const handleKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     e.preventDefault();
     e.stopPropagation();
@@ -24,7 +26,7 @@ export function HotkeyCapture({ id, value, onChange, className }: HotkeyCaptureP
       id={id}
       readOnly
       value={displayHotkey(value, isMacPlatform())}
-      placeholder="Press a shortcut…"
+      placeholder={t("common.hotkey.placeholder")}
       onKeyDown={handleKeyDown}
       className={cn("cursor-pointer text-center font-medium", className)}
     />

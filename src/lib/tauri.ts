@@ -46,6 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
     fallback_to_local: true,
   },
   history_enabled: true,
+  ui_language: "en",
   license: { key: "", server_url: "https://license.kk-lab.net" },
   onboarding_done: false,
   paused: false,
@@ -199,10 +200,32 @@ export function getSettings(): Promise<Settings> {
 }
 
 export function setSettings(settings: Settings): Promise<Settings> {
-  if (!isMock) return invoke<Settings>("set_settings", { settings });
+  if (!isMock)
+    return invoke<Settings>("set_settings", { settings }).then((stored) => {
+      notifySettingsChanged(stored);
+      return stored;
+    });
   const stored = clone(settings);
   mockWriteSettings(stored);
+  notifySettingsChanged(stored);
   return Promise.resolve(stored);
+}
+
+// In-window notification that settings were persisted — not part of the IPC
+// contract. Views hold independent copies of the settings, so the app shell
+// subscribes here to pick up changes made elsewhere (e.g. the UI language)
+// without a reload.
+const settingsListeners = new Set<(settings: Settings) => void>();
+
+export function onSettingsChanged(cb: (settings: Settings) => void): Unsubscribe {
+  settingsListeners.add(cb);
+  return () => {
+    settingsListeners.delete(cb);
+  };
+}
+
+function notifySettingsChanged(stored: Settings): void {
+  for (const cb of [...settingsListeners]) cb(stored);
 }
 
 export function listInputDevices(): Promise<string[]> {
@@ -292,6 +315,8 @@ export function getLicenseStatus(): Promise<LicenseStatus> {
     trial_days_left: 5,
     expires: null,
     last_checked_ms: null,
+    server_active: null,
+    days_left: null,
   });
 }
 
@@ -303,12 +328,14 @@ export function checkLicenseNow(): Promise<LicenseStatus> {
     trial_days_left: null,
     expires: active ? "2027-01-01" : null,
     last_checked_ms: Date.now(),
+    server_active: active,
+    days_left: active ? 365 : null,
   });
 }
 
-export function openRepo(): Promise<null> {
-  if (!isMock) return invoke<null>("open_repo");
-  window.open("https://github.com/kochevrin/voice-to-text", "_blank");
+export function openUrl(url: string): Promise<null> {
+  if (!isMock) return invoke<null>("open_url", { url });
+  window.open(url, "_blank");
   return Promise.resolve(null);
 }
 

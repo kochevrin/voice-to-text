@@ -3,45 +3,48 @@
 @tailwind utilities;
 
 @layer base {
+  /* Palette derived from the product mark: deep navy graphite ground, a single
+     warm signal-orange accent. State colors are deliberately kept apart from
+     the accent so "recording" and "brand" never read as the same thing. */
   :root {
-    --background: 0 0% 100%;
-    --foreground: 224 20% 10%;
+    --background: 220 30% 97%;
+    --foreground: 220 30% 12%;
     --card: 0 0% 100%;
-    --card-foreground: 224 20% 10%;
-    --primary: 172 60% 30%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 220 14% 94%;
-    --secondary-foreground: 224 20% 12%;
-    --muted: 220 14% 94%;
-    --muted-foreground: 224 8% 42%;
-    --accent: 220 14% 92%;
-    --accent-foreground: 224 20% 12%;
-    --destructive: 0 72% 44%;
+    --card-foreground: 220 30% 12%;
+    --primary: 28 89% 50%;
+    --primary-foreground: 220 40% 8%;
+    --secondary: 220 20% 92%;
+    --secondary-foreground: 220 30% 15%;
+    --muted: 220 20% 93%;
+    --muted-foreground: 220 12% 42%;
+    --accent: 220 20% 90%;
+    --accent-foreground: 220 30% 15%;
+    --destructive: 0 72% 46%;
     --destructive-foreground: 0 0% 100%;
-    --border: 220 13% 88%;
-    --input: 220 13% 84%;
-    --ring: 172 60% 34%;
-    --radius: 0.6rem;
+    --border: 220 18% 86%;
+    --input: 220 18% 82%;
+    --ring: 28 89% 50%;
+    --radius: 0.5rem;
   }
 
   .dark {
-    --background: 225 15% 7%;
-    --foreground: 220 14% 90%;
-    --card: 225 15% 10%;
-    --card-foreground: 220 14% 90%;
-    --primary: 172 55% 45%;
-    --primary-foreground: 226 20% 8%;
-    --secondary: 225 12% 16%;
-    --secondary-foreground: 220 14% 88%;
-    --muted: 225 12% 15%;
-    --muted-foreground: 222 8% 58%;
-    --accent: 225 12% 18%;
-    --accent-foreground: 220 14% 90%;
-    --destructive: 0 62% 48%;
+    --background: 220 30% 7%;
+    --foreground: 214 20% 92%;
+    --card: 220 26% 10%;
+    --card-foreground: 214 20% 92%;
+    --primary: 28 92% 54%;
+    --primary-foreground: 220 40% 8%;
+    --secondary: 220 22% 15%;
+    --secondary-foreground: 214 18% 88%;
+    --muted: 220 22% 14%;
+    --muted-foreground: 216 12% 60%;
+    --accent: 220 22% 17%;
+    --accent-foreground: 214 20% 92%;
+    --destructive: 0 68% 52%;
     --destructive-foreground: 0 0% 98%;
-    --border: 225 12% 19%;
-    --input: 225 12% 22%;
-    --ring: 172 55% 45%;
+    --border: 220 20% 18%;
+    --input: 220 20% 22%;
+    --ring: 28 92% 54%;
   }
 
   * {
@@ -67,9 +70,116 @@
       sans-serif;
   }
 
+  /* Scrollbars stay hairline-thin so a scrolling panel never visibly eats
+     layout width. */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--border)) transparent;
+  }
+
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--border));
+    border: 3px solid transparent;
+    background-clip: content-box;
+    border-radius: 999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--input));
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
   /* The pill window route renders on a fully transparent page. */
   html.pill-route,
   html.pill-route body {
     background: transparent !important;
+  }
+}
+
+@layer components {
+  /* Machine data — hotkeys, dates, model sizes, status readouts — is set in the
+     utility face; prose stays in the sans stack. */
+  .readout {
+    font-family:
+      ui-monospace,
+      "SF Mono",
+      "Cascadia Mono",
+      "JetBrains Mono",
+      "Roboto Mono",
+      Menlo,
+      Consolas,
+      monospace;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .eyebrow {
+    @apply readout text-[10px] uppercase tracking-[0.14em] text-muted-foreground;
+  }
+
+  /* Signature element: the transmission line. A hairline under the header that
+     carries the app state — inert when idle, breathing while recording,
+     sweeping while the transcript is produced. */
+  .transmission {
+    @apply relative h-px w-full overflow-hidden bg-border;
+  }
+
+  .transmission[data-state="recording"] {
+    @apply bg-rec/30;
+  }
+
+  .transmission[data-state="recording"]::after,
+  .transmission[data-state="transcribing"]::after {
+    content: "";
+    @apply absolute inset-y-0 left-0 w-1/3;
+  }
+
+  .transmission[data-state="recording"]::after {
+    @apply bg-rec;
+    animation: transmission-breathe 1.6s ease-in-out infinite;
+  }
+
+  .transmission[data-state="transcribing"]::after {
+    @apply bg-work;
+    animation: transmission-sweep 1.1s linear infinite;
+  }
+
+  .transmission[data-state="error"] {
+    @apply bg-destructive/60;
+  }
+
+  @keyframes transmission-breathe {
+    0%,
+    100% {
+      opacity: 0.35;
+      transform: scaleX(0.6);
+    }
+    50% {
+      opacity: 1;
+      transform: scaleX(1);
+    }
+  }
+
+  @keyframes transmission-sweep {
+    from {
+      transform: translateX(-100%);
+    }
+    to {
+      transform: translateX(300%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .transmission::after {
+      animation: none !important;
+      opacity: 0.8;
+    }
   }
 }

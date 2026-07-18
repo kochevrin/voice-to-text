@@ -1,6 +1,8 @@
 // TS mirrors of the Rust types in docs/contracts.md. Field names must stay
 // snake_case to match the serde-serialized payloads exactly.
 
+import type { Lang } from "./i18n";
+
 export type HotkeyMode = "push_to_talk" | "toggle";
 
 export interface PostprocSettings {
@@ -35,6 +37,9 @@ export interface Settings {
   postproc: PostprocSettings;
   cloud: CloudSettings;
   history_enabled: boolean;
+  /** Interface language. Independent of `language`, which is what Whisper
+   * transcribes. */
+  ui_language: Lang;
   license: LicenseSettings;
   onboarding_done: boolean;
   paused: boolean;
@@ -52,6 +57,11 @@ export interface LicenseStatus {
   trial_days_left: number | null;
   expires: string | null;
   last_checked_ms: number | null;
+  /** What the license server last said about the key: true = accepted,
+   * false = rejected, null = never verified. */
+  server_active: boolean | null;
+  /** Subscription days remaining, independent of trial_days_left. */
+  days_left: number | null;
 }
 
 export interface ModelInfo {

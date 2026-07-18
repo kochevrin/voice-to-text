@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS, getHistory, getSettings } from "./tauri";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { DEFAULT_SETTINGS, getHistory, getSettings, openUrl } from "./tauri";
 
 describe("tauri mock history", () => {
   beforeEach(() => {
@@ -26,5 +26,20 @@ describe("tauri mock settings", () => {
     const settings = await getSettings();
     expect(settings.hotkey).toBe("Ctrl+Shift+K");
     expect(settings.cloud).toEqual(DEFAULT_SETTINGS.cloud);
+  });
+
+  it("defaults ui_language to en for settings stored before it existed", async () => {
+    const { ui_language: _lang, ...legacy } = DEFAULT_SETTINGS;
+    localStorage.setItem("whispr-mock-settings", JSON.stringify(legacy));
+    await expect(getSettings()).resolves.toMatchObject({ ui_language: "en" });
+  });
+});
+
+describe("tauri mock openUrl", () => {
+  it("opens the given url in a new tab", async () => {
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    await openUrl("https://github.com/kochevrin");
+    expect(open).toHaveBeenCalledWith("https://github.com/kochevrin", "_blank");
+    open.mockRestore();
   });
 });

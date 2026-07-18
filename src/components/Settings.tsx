@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ArrowLeft, Download, Trash2 } from "lucide-react";
+import { ArrowLeft, Download, Eye, EyeOff, Info, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +25,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { HotkeyCapture } from "@/components/HotkeyCapture";
 import { useSettings } from "@/hooks/useSettings";
+import { I18nProvider, LANGS, useT } from "@/lib/i18n";
+import type { Lang, TFunction } from "@/lib/i18n";
 import type {
   HotkeyMode,
   LicenseStatus,
@@ -42,10 +44,13 @@ import {
   listInputDevices,
   listModels,
   onModelDownloadProgress,
+  openUrl,
 } from "@/lib/tauri";
 import { cn, formatBytes } from "@/lib/utils";
 
 const DEFAULT_DEVICE = "__default__";
+
+const GROQ_CONSOLE_URL = "https://console.groq.com/keys";
 
 const CLOUD_PRESETS = [
   {
@@ -62,8 +67,9 @@ const CLOUD_PRESETS = [
   },
 ] as const;
 
-const LANGUAGES: { value: string; label: string }[] = [
-  { value: "auto", label: "Auto-detect" },
+/** Dictation languages. Each name stays in its own language — never
+ * translated; "auto" is the one entry that is real UI copy. */
+const DICTATION_LANGUAGES: { value: string; label: string }[] = [
   { value: "en", label: "English" },
   { value: "ru", label: "Русский" },
   { value: "de", label: "Deutsch" },
@@ -76,33 +82,96 @@ interface SettingsProps {
   onClose?: () => void;
 }
 
+interface SecretInputProps {
+  id: string;
+  /** Accessible name of the field itself, e.g. "License key". */
+  label: string;
+  /** Accessible names of the reveal button in both of its states. */
+  showLabel: string;
+  hideLabel: string;
+  value: string;
+  onChange: (value: string) => void;
+}
+
+/** Masked credential field with an eye toggle. Secrets are never shown by
+ * default — someone is usually looking over a dictating user's shoulder. */
+function SecretInput({
+  id,
+  label,
+  showLabel,
+  hideLabel,
+  value,
+  onChange,
+}: SecretInputProps) {
+  const [shown, setShown] = useState(false);
+  return (
+    <div className="relative">
+      <Input
+        id={id}
+        aria-label={label}
+        type={shown ? "text" : "password"}
+        className="readout pr-10"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+      <button
+        type="button"
+        aria-label={shown ? hideLabel : showLabel}
+        onClick={() => setShown((current) => !current)}
+        className="absolute inset-y-0 right-0 flex w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+      >
+        {shown ? (
+          <EyeOff className="size-4" />
+        ) : (
+          <Eye className="size-4" />
+        )}
+      </button>
+    </div>
+  );
+}
+
 export function Settings({ onClose }: SettingsProps) {
   const { settings, save } = useSettings();
-  const [draft, setDraft] = useState<SettingsType | null>(null);
+  const t = useT();
+
+  if (!settings) {
+    return (
+      <div className="p-6 text-sm text-muted-foreground">
+        {t("common.loading")}
+      </div>
+    );
+  }
+
+  return <SettingsEditor stored={settings} save={save} onClose={onClose} />;
+}
+
+interface SettingsEditorProps extends SettingsProps {
+  stored: SettingsType;
+  save: (next: SettingsType) => Promise<SettingsType>;
+}
+
+function SettingsEditor({ stored, save, onClose }: SettingsEditorProps) {
+  const [draft, setDraft] = useState<SettingsType>(stored);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (settings && draft === null) setDraft(settings);
-  }, [settings, draft]);
-
-  const dirty =
-    settings !== null &&
-    draft !== null &&
-    JSON.stringify(draft) !== JSON.stringify(settings);
+  const dirty = JSON.stringify(draft) !== JSON.stringify(stored);
 
   const update = (patch: Partial<SettingsType>) => {
     setSaveError(null);
-    setDraft((current) => (current ? { ...current, ...patch } : current));
+    setDraft((current) => ({ ...current, ...patch }));
+  };
+
+  /** Persist the current draft, rethrowing so callers can surface failures. */
+  const persistDraft = async () => {
+    setDraft(await save(draft));
   };
 
   const handleSave = async () => {
-    if (!draft) return;
     setSaving(true);
     setSaveError(null);
     try {
-      const stored = await save(draft);
-      setDraft(stored);
+      await persistDraft();
     } catch (err) {
       setSaveError(String(err));
     } finally {
@@ -110,19 +179,65 @@ export function Settings({ onClose }: SettingsProps) {
     }
   };
 
-  if (!draft) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
-  }
+  // The screen speaks the language being picked, before Save — the language
+  // select is its own preview. Once saved, the app shell follows suit.
+  return (
+    <I18nProvider lang={draft.ui_language}>
+      <SettingsScreen
+        draft={draft}
+        update={update}
+        persist={persistDraft}
+        dirty={dirty}
+        saving={saving}
+        saveError={saveError}
+        onSave={() => void handleSave()}
+        onClose={onClose}
+      />
+    </I18nProvider>
+  );
+}
+
+interface TabProps {
+  draft: SettingsType;
+  update: (patch: Partial<SettingsType>) => void;
+}
+
+interface SettingsScreenProps extends TabProps, SettingsProps {
+  persist: () => Promise<void>;
+  dirty: boolean;
+  saving: boolean;
+  saveError: string | null;
+  onSave: () => void;
+}
+
+function SettingsScreen({
+  draft,
+  update,
+  persist,
+  dirty,
+  saving,
+  saveError,
+  onSave,
+  onClose,
+}: SettingsScreenProps) {
+  const t = useT();
 
   return (
     <div className="flex h-full flex-col">
-      <header className="flex items-center gap-2 border-b px-4 py-3">
+      <header className="flex items-center gap-2 px-4 py-3">
         {onClose && (
-          <Button variant="ghost" size="icon" aria-label="Back" onClick={onClose}>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t("settings.back")}
+            onClick={onClose}
+          >
             <ArrowLeft />
           </Button>
         )}
-        <h1 className="text-base font-semibold">Settings</h1>
+        <h1 className="text-sm font-semibold tracking-tight">
+          {t("common.settings")}
+        </h1>
         <div className="ml-auto flex items-center gap-3">
           {saveError && (
             <span role="alert" className="text-xs text-destructive">
@@ -130,25 +245,29 @@ export function Settings({ onClose }: SettingsProps) {
             </span>
           )}
           {dirty && (
-            <span className="text-xs text-amber-400">Unsaved changes</span>
+            <span className="readout text-[11px] uppercase tracking-[0.12em] text-warn">
+              {t("settings.unsaved")}
+            </span>
           )}
-          <Button
-            size="sm"
-            onClick={() => void handleSave()}
-            disabled={!dirty || saving}
-          >
-            Save
+          <Button size="sm" onClick={onSave} disabled={!dirty || saving}>
+            {t("settings.save")}
           </Button>
         </div>
       </header>
+      <div className="transmission" />
 
-      <Tabs defaultValue="general" className="flex flex-1 flex-col overflow-hidden p-4">
-        <TabsList className="grid w-full shrink-0 grid-cols-5">
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="transcription">Transcription</TabsTrigger>
-          <TabsTrigger value="postproc">Post-processing</TabsTrigger>
-          <TabsTrigger value="privacy">Privacy</TabsTrigger>
-          <TabsTrigger value="license">License</TabsTrigger>
+      <Tabs
+        defaultValue="general"
+        className="flex flex-1 flex-col overflow-hidden px-4 pb-4"
+      >
+        <TabsList className="w-full shrink-0">
+          <TabsTrigger value="general">{t("settings.tab.general")}</TabsTrigger>
+          <TabsTrigger value="transcription">
+            {t("settings.tab.transcription")}
+          </TabsTrigger>
+          <TabsTrigger value="postproc">{t("settings.tab.postproc")}</TabsTrigger>
+          <TabsTrigger value="privacy">{t("settings.tab.privacy")}</TabsTrigger>
+          <TabsTrigger value="license">{t("settings.tab.license")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="general" className="mt-4 flex-1 space-y-5 overflow-y-auto">
@@ -171,19 +290,15 @@ export function Settings({ onClose }: SettingsProps) {
         </TabsContent>
 
         <TabsContent value="license" className="mt-4 flex-1 space-y-5 overflow-y-auto">
-          <LicenseTab draft={draft} update={update} />
+          <LicenseTab draft={draft} update={update} persist={persist} />
         </TabsContent>
       </Tabs>
     </div>
   );
 }
 
-interface TabProps {
-  draft: SettingsType;
-  update: (patch: Partial<SettingsType>) => void;
-}
-
 function GeneralTab({ draft, update }: TabProps) {
+  const t = useT();
   const [devices, setDevices] = useState<string[]>([]);
 
   useEffect(() => {
@@ -195,19 +310,19 @@ function GeneralTab({ draft, update }: TabProps) {
   return (
     <>
       <div className="space-y-2">
-        <Label htmlFor="hotkey">Hotkey</Label>
+        <Label htmlFor="hotkey">{t("settings.general.hotkey")}</Label>
         <HotkeyCapture
           id="hotkey"
           value={draft.hotkey}
           onChange={(hotkey) => update({ hotkey })}
         />
         <p className="text-xs text-muted-foreground">
-          Click the field, then press the new shortcut.
+          {t("settings.general.hotkeyHint")}
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="hotkey-mode">Mode</Label>
+        <Label htmlFor="hotkey-mode">{t("settings.general.mode")}</Label>
         <Select
           value={draft.hotkey_mode}
           onValueChange={(v) => update({ hotkey_mode: v as HotkeyMode })}
@@ -216,14 +331,40 @@ function GeneralTab({ draft, update }: TabProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="push_to_talk">Push to talk</SelectItem>
-            <SelectItem value="toggle">Toggle</SelectItem>
+            <SelectItem value="push_to_talk">
+              {t("settings.general.mode.push")}
+            </SelectItem>
+            <SelectItem value="toggle">
+              {t("settings.general.mode.toggle")}
+            </SelectItem>
           </SelectContent>
         </Select>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="input-device">Input device</Label>
+        <Label htmlFor="ui-language">{t("settings.general.uiLanguage")}</Label>
+        <Select
+          value={draft.ui_language}
+          onValueChange={(v) => update({ ui_language: v as Lang })}
+        >
+          <SelectTrigger id="ui-language">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {LANGS.map((l) => (
+              <SelectItem key={l.value} value={l.value}>
+                {l.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {t("settings.general.uiLanguageHint")}
+        </p>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="input-device">{t("settings.general.device")}</Label>
         <Select
           value={draft.input_device ?? DEFAULT_DEVICE}
           onValueChange={(v) =>
@@ -234,7 +375,9 @@ function GeneralTab({ draft, update }: TabProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={DEFAULT_DEVICE}>System default</SelectItem>
+            <SelectItem value={DEFAULT_DEVICE}>
+              {t("settings.general.device.default")}
+            </SelectItem>
             {devices.map((d) => (
               <SelectItem key={d} value={d}>
                 {d}
@@ -245,7 +388,7 @@ function GeneralTab({ draft, update }: TabProps) {
       </div>
 
       <div className="flex items-center justify-between">
-        <Label htmlFor="pill-enabled">Show recording pill</Label>
+        <Label htmlFor="pill-enabled">{t("settings.general.pill")}</Label>
         <Switch
           id="pill-enabled"
           checked={draft.pill_enabled}
@@ -254,9 +397,10 @@ function GeneralTab({ draft, update }: TabProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="silence-timeout">Silence timeout (ms)</Label>
+        <Label htmlFor="silence-timeout">{t("settings.general.silence")}</Label>
         <Input
           id="silence-timeout"
+          className="readout"
           type="number"
           min={100}
           max={10000}
@@ -278,7 +422,7 @@ function GeneralTab({ draft, update }: TabProps) {
       </div>
 
       <div className="flex items-center justify-between">
-        <Label htmlFor="vad-enabled">Voice activity detection</Label>
+        <Label htmlFor="vad-enabled">{t("settings.general.vad")}</Label>
         <Switch
           id="vad-enabled"
           checked={draft.vad_enabled}
@@ -289,7 +433,43 @@ function GeneralTab({ draft, update }: TabProps) {
   );
 }
 
+/** The one thing standing between a new user and working cloud dictation is a
+ * Groq key, so the steps live right next to the provider select. */
+function GroqHelpDialog() {
+  const t = useT();
+
+  return (
+    <Dialog>
+      <DialogTrigger asChild>
+        <Button variant="ghost" size="icon" aria-label={t("settings.groq.help")}>
+          <Info />
+        </Button>
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("settings.groq.title")}</DialogTitle>
+        </DialogHeader>
+        <ol className="list-decimal space-y-2 pl-5 text-sm text-muted-foreground">
+          <li>{t("settings.groq.step1")}</li>
+          <li>{t("settings.groq.step2")}</li>
+          <li>{t("settings.groq.step3")}</li>
+          <li>{t("settings.groq.step4")}</li>
+        </ol>
+        <DialogDescription className="text-xs">
+          {t("settings.groq.note")}
+        </DialogDescription>
+        <DialogFooter>
+          <Button onClick={() => void openUrl(GROQ_CONSOLE_URL)}>
+            {t("settings.groq.open")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function TranscriptionTab({ draft, update }: TabProps) {
+  const t = useT();
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [progress, setProgress] = useState<Record<string, ModelDownloadProgress>>(
     {},
@@ -336,8 +516,8 @@ function TranscriptionTab({ draft, update }: TabProps) {
 
   return (
     <>
-      <div className="space-y-2">
-        <Label>Model</Label>
+      <section className="space-y-3">
+        <h2 className="eyebrow">{t("settings.transcription.localModel")}</h2>
         <div className="space-y-2">
           {models.map((m) => {
             const p = progress[m.id];
@@ -347,7 +527,7 @@ function TranscriptionTab({ draft, update }: TabProps) {
                 key={m.id}
                 className={cn(
                   "rounded-md border px-3 py-2",
-                  active && "border-primary/60 bg-primary/5",
+                  active && "border-ok/40",
                 )}
               >
                 <div className="flex items-center gap-2">
@@ -355,15 +535,15 @@ function TranscriptionTab({ draft, update }: TabProps) {
                     type="button"
                     onClick={() => update({ model: m.id })}
                     className="flex flex-1 items-center gap-2 text-left text-sm"
-                    aria-label={`Use model ${m.id}`}
+                    aria-label={t("settings.transcription.useModel", { id: m.id })}
                   >
-                    <span className="font-medium">{m.id}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="readout font-medium">{m.id}</span>
+                    <span className="readout text-xs text-muted-foreground">
                       {formatBytes(m.size_bytes)}
                     </span>
                     {active && (
-                      <span className="rounded bg-primary/15 px-1.5 py-0.5 text-[10px] font-medium text-primary">
-                        Active
+                      <span className="readout text-[10px] uppercase tracking-[0.12em] text-ok">
+                        {t("settings.transcription.active")}
                       </span>
                     )}
                   </button>
@@ -371,7 +551,9 @@ function TranscriptionTab({ draft, update }: TabProps) {
                     <Button
                       variant="ghost"
                       size="icon"
-                      aria-label={`Delete ${m.id}`}
+                      aria-label={t("settings.transcription.deleteModel", {
+                        id: m.id,
+                      })}
                       onClick={() => void handleDelete(m.id)}
                     >
                       <Trash2 />
@@ -380,11 +562,13 @@ function TranscriptionTab({ draft, update }: TabProps) {
                     <Button
                       variant="outline"
                       size="sm"
-                      aria-label={`Download ${m.id}`}
+                      aria-label={t("settings.transcription.downloadModel", {
+                        id: m.id,
+                      })}
                       onClick={() => void handleDownload(m.id)}
                     >
                       <Download />
-                      Download
+                      {t("settings.transcription.download")}
                     </Button>
                   )}
                 </div>
@@ -403,10 +587,10 @@ function TranscriptionTab({ draft, update }: TabProps) {
             {downloadError}
           </p>
         )}
-      </div>
+      </section>
 
       <div className="space-y-2">
-        <Label htmlFor="language">Language</Label>
+        <Label htmlFor="language">{t("settings.transcription.language")}</Label>
         <Select
           value={draft.language}
           onValueChange={(language) => update({ language })}
@@ -415,7 +599,10 @@ function TranscriptionTab({ draft, update }: TabProps) {
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            {LANGUAGES.map((l) => (
+            <SelectItem value="auto">
+              {t("settings.transcription.language.auto")}
+            </SelectItem>
+            {DICTATION_LANGUAGES.map((l) => (
               <SelectItem key={l.value} value={l.value}>
                 {l.label}
               </SelectItem>
@@ -423,14 +610,17 @@ function TranscriptionTab({ draft, update }: TabProps) {
           </SelectContent>
         </Select>
         <p className="text-xs text-muted-foreground">
-          With a non-English language, English-only (.en) models automatically
-          fall back to the multilingual variant.
+          {t("settings.transcription.languageHint")}
         </p>
       </div>
 
-      <div className="space-y-5 border-t pt-5">
+      <section className="space-y-5 border-t pt-5">
+        <h2 className="eyebrow">{t("settings.transcription.cloud")}</h2>
+
         <div className="flex items-center justify-between">
-          <Label htmlFor="cloud-enabled">Cloud transcription</Label>
+          <Label htmlFor="cloud-enabled">
+            {t("settings.transcription.cloudEnabled")}
+          </Label>
           <Switch
             id="cloud-enabled"
             checked={draft.cloud.enabled}
@@ -439,60 +629,76 @@ function TranscriptionTab({ draft, update }: TabProps) {
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="cloud-provider">Provider</Label>
-          <Select
-            value={cloudPreset}
-            onValueChange={(v) => {
-              const preset = CLOUD_PRESETS.find((p) => p.value === v);
-              if (preset)
-                updateCloud({ base_url: preset.base_url, model: preset.model });
-            }}
-          >
-            <SelectTrigger id="cloud-provider">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {CLOUD_PRESETS.map((p) => (
-                <SelectItem key={p.value} value={p.value}>
-                  {p.label}
+          <Label htmlFor="cloud-provider">
+            {t("settings.transcription.provider")}
+          </Label>
+          <div className="flex items-center gap-1">
+            <Select
+              value={cloudPreset}
+              onValueChange={(v) => {
+                const preset = CLOUD_PRESETS.find((p) => p.value === v);
+                if (preset)
+                  updateCloud({ base_url: preset.base_url, model: preset.model });
+              }}
+            >
+              <SelectTrigger id="cloud-provider" className="flex-1">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CLOUD_PRESETS.map((p) => (
+                  <SelectItem key={p.value} value={p.value}>
+                    {p.label}
+                  </SelectItem>
+                ))}
+                <SelectItem value="custom">
+                  {t("settings.transcription.provider.custom")}
                 </SelectItem>
-              ))}
-              <SelectItem value="custom">Custom</SelectItem>
-            </SelectContent>
-          </Select>
+              </SelectContent>
+            </Select>
+            <GroqHelpDialog />
+          </div>
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="cloud-base-url">Base URL</Label>
+          <Label htmlFor="cloud-base-url">
+            {t("settings.transcription.baseUrl")}
+          </Label>
           <Input
             id="cloud-base-url"
+            className="readout"
             value={draft.cloud.base_url}
             onChange={(e) => updateCloud({ base_url: e.target.value })}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="cloud-api-key">API key</Label>
-          <Input
+          <Label htmlFor="cloud-api-key">
+            {t("settings.transcription.apiKey")}
+          </Label>
+          <SecretInput
             id="cloud-api-key"
-            type="password"
-            aria-label="API key"
+            label={t("settings.transcription.apiKey")}
+            showLabel={t("settings.transcription.showApiKey")}
+            hideLabel={t("settings.transcription.hideApiKey")}
             value={draft.cloud.api_key}
-            onChange={(e) => updateCloud({ api_key: e.target.value })}
+            onChange={(api_key) => updateCloud({ api_key })}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="cloud-model">Model</Label>
+          <Label htmlFor="cloud-model">{t("settings.transcription.model")}</Label>
           <Input
             id="cloud-model"
+            className="readout"
             value={draft.cloud.model}
             onChange={(e) => updateCloud({ model: e.target.value })}
           />
         </div>
 
         <div className="flex items-center justify-between">
-          <Label htmlFor="cloud-fallback">Fall back to local on failure</Label>
+          <Label htmlFor="cloud-fallback">
+            {t("settings.transcription.fallback")}
+          </Label>
           <Switch
             id="cloud-fallback"
             checked={draft.cloud.fallback_to_local}
@@ -503,16 +709,16 @@ function TranscriptionTab({ draft, update }: TabProps) {
         </div>
 
         <p className="text-xs text-muted-foreground">
-          The API key is stored in plain text in the local settings file. While
-          cloud transcription is enabled, recorded audio is uploaded to the
-          server above.
+          {t("settings.transcription.cloudNote")}
         </p>
-      </div>
+      </section>
     </>
   );
 }
 
 function PostprocTab({ draft, update }: TabProps) {
+  const t = useT();
+
   const updatePostproc = (patch: Partial<SettingsType["postproc"]>) => {
     update({ postproc: { ...draft.postproc, ...patch } });
   };
@@ -520,7 +726,7 @@ function PostprocTab({ draft, update }: TabProps) {
   return (
     <>
       <div className="flex items-center justify-between">
-        <Label htmlFor="postproc-enabled">Enable post-processing</Label>
+        <Label htmlFor="postproc-enabled">{t("settings.postproc.enabled")}</Label>
         <Switch
           id="postproc-enabled"
           checked={draft.postproc.enabled}
@@ -529,25 +735,27 @@ function PostprocTab({ draft, update }: TabProps) {
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="ollama-url">Ollama URL</Label>
+        <Label htmlFor="ollama-url">{t("settings.postproc.ollamaUrl")}</Label>
         <Input
           id="ollama-url"
+          className="readout"
           value={draft.postproc.ollama_url}
           onChange={(e) => updatePostproc({ ollama_url: e.target.value })}
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="postproc-model">Model</Label>
+        <Label htmlFor="postproc-model">{t("settings.postproc.model")}</Label>
         <Input
           id="postproc-model"
+          className="readout"
           value={draft.postproc.model}
           onChange={(e) => updatePostproc({ model: e.target.value })}
         />
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="postproc-prompt">Prompt</Label>
+        <Label htmlFor="postproc-prompt">{t("settings.postproc.prompt")}</Label>
         <Textarea
           id="postproc-prompt"
           rows={4}
@@ -557,14 +765,14 @@ function PostprocTab({ draft, update }: TabProps) {
       </div>
 
       <p className="text-xs text-muted-foreground">
-        If Ollama is unreachable or errors, the raw transcript is used silently —
-        dictation never blocks on post-processing.
+        {t("settings.postproc.note")}
       </p>
     </>
   );
 }
 
 function PrivacyTab({ draft, update }: TabProps) {
+  const t = useT();
   const [modelsBytes, setModelsBytes] = useState<number | null>(null);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
@@ -575,19 +783,22 @@ function PrivacyTab({ draft, update }: TabProps) {
   return (
     <>
       {draft.cloud.enabled ? (
-        <div className="flex items-center gap-2 rounded-md border border-amber-600/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-500 dark:text-amber-400">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-amber-500" />
-          Cloud transcription on — audio is sent to {draft.cloud.base_url}
+        <div className="flex items-start gap-2 rounded-md border border-warn/40 px-3 py-2.5 text-sm text-warn">
+          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-warn" />
+          <p>
+            {t("settings.privacy.cloudOn")}{" "}
+            <span className="readout break-all">{draft.cloud.base_url}</span>
+          </p>
         </div>
       ) : (
-        <div className="flex items-center gap-2 rounded-md border border-emerald-600/40 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-500 dark:text-emerald-400">
-          <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
-          100% local — audio never leaves this device
+        <div className="flex items-start gap-2 rounded-md border border-ok/40 px-3 py-2.5 text-sm text-ok">
+          <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-ok" />
+          <p>{t("settings.privacy.local")}</p>
         </div>
       )}
 
       <div className="flex items-center justify-between">
-        <Label htmlFor="history-enabled">Save transcription history</Label>
+        <Label htmlFor="history-enabled">{t("settings.privacy.history")}</Label>
         <Switch
           id="history-enabled"
           checked={draft.history_enabled}
@@ -596,31 +807,31 @@ function PrivacyTab({ draft, update }: TabProps) {
       </div>
       {!draft.history_enabled && (
         <p className="text-xs text-muted-foreground">
-          New transcriptions won&apos;t be kept in history.
+          {t("settings.privacy.historyOff")}
         </p>
       )}
 
-      <p className="text-sm text-muted-foreground">
-        Models on disk:{" "}
-        <span className="font-medium text-foreground">
+      <div className="space-y-1">
+        <h2 className="eyebrow">{t("settings.privacy.disk")}</h2>
+        <p className="readout text-sm text-foreground">
           {modelsBytes === null ? "…" : formatBytes(modelsBytes)}
-        </span>
-      </p>
+        </p>
+      </div>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogTrigger asChild>
-          <Button variant="outline">Clear history</Button>
+          <Button variant="outline">{t("settings.privacy.clear")}</Button>
         </DialogTrigger>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Clear history?</DialogTitle>
+            <DialogTitle>{t("settings.privacy.clearTitle")}</DialogTitle>
             <DialogDescription>
-              This permanently removes all stored transcriptions from this device.
+              {t("settings.privacy.clearBody")}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
             <Button variant="ghost" onClick={() => setConfirmOpen(false)}>
-              Cancel
+              {t("settings.privacy.cancel")}
             </Button>
             <Button
               variant="destructive"
@@ -629,7 +840,7 @@ function PrivacyTab({ draft, update }: TabProps) {
                 setConfirmOpen(false);
               }}
             >
-              Clear
+              {t("settings.privacy.confirm")}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -638,23 +849,65 @@ function PrivacyTab({ draft, update }: TabProps) {
   );
 }
 
-function formatLicenseStatus(status: LicenseStatus): string {
+function formatLicenseStatus(t: TFunction, status: LicenseStatus): string {
   switch (status.state) {
     case "disabled":
-      return "Disabled";
+      return t("settings.license.state.disabled");
     case "trial":
-      return `Trial — ${status.trial_days_left ?? 0} days left`;
+      return t("settings.license.state.trial", {
+        days: status.trial_days_left ?? 0,
+      });
     case "active":
-      return `Active until ${status.expires ?? "unknown date"}`;
+      return t("settings.license.state.active", {
+        date: status.expires ?? t("settings.license.unknownDate"),
+      });
     case "inactive":
-      return "Inactive — dictation blocked";
+      return t("settings.license.state.inactive");
     case "unverified":
-      return "Unverified — could not reach server";
+      return t("settings.license.state.unverified");
   }
 }
 
-function LicenseTab({ draft, update }: TabProps) {
+/** What the license server said last time we asked — the half of the picture
+ * the old single-word status hid. */
+function formatServerVerdict(t: TFunction, status: LicenseStatus): string {
+  if (status.server_active === false)
+    return t("settings.license.verdict.rejected");
+  if (status.server_active !== true)
+    return t("settings.license.verdict.pending");
+  const parts = [t("settings.license.verdict.active")];
+  if (status.days_left !== null)
+    parts.push(t("settings.license.verdict.daysLeft", { days: status.days_left }));
+  if (status.expires !== null)
+    parts.push(t("settings.license.verdict.until", { date: status.expires }));
+  return parts.join(" · ");
+}
+
+function verdictTone(status: LicenseStatus): string {
+  if (status.server_active === true) return "text-ok";
+  if (status.server_active === false) return "text-destructive";
+  return "text-muted-foreground";
+}
+
+function formatCheckedAt(t: TFunction, ms: number | null): string | null {
+  if (ms === null) return null;
+  const at = new Date(ms).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return t("settings.license.checkedAt", { time: at });
+}
+
+interface LicenseTabProps extends TabProps {
+  /** Writes the current draft through to the backend, rethrowing on failure. */
+  persist: () => Promise<void>;
+}
+
+function LicenseTab({ draft, update, persist }: LicenseTabProps) {
+  const t = useT();
   const [status, setStatus] = useState<LicenseStatus | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [checkError, setCheckError] = useState<string | null>(null);
 
   const updateLicense = (patch: Partial<SettingsType["license"]>) => {
     update({ license: { ...draft.license, ...patch } });
@@ -664,46 +917,98 @@ function LicenseTab({ draft, update }: TabProps) {
     void getLicenseStatus().then(setStatus);
   }, []);
 
+  // The backend checks the *saved* key, so persist the draft first — otherwise
+  // a freshly typed key silently checks the previous one.
   const handleCheck = async () => {
-    setStatus(await checkLicenseNow());
+    setChecking(true);
+    setCheckError(null);
+    try {
+      await persist();
+      setStatus(await checkLicenseNow());
+    } catch (err) {
+      setCheckError(String(err));
+    } finally {
+      setChecking(false);
+    }
   };
+
+  const checkedAt =
+    status === null ? null : formatCheckedAt(t, status.last_checked_ms);
 
   return (
     <>
-      <div className="space-y-2">
-        <Label htmlFor="license-key">License key</Label>
-        <Input
-          id="license-key"
-          aria-label="License key"
-          value={draft.license.key}
-          onChange={(e) => updateLicense({ key: e.target.value })}
-        />
-      </div>
-
-      <div className="space-y-2">
-        <Label htmlFor="license-server-url">License server URL</Label>
-        <Input
-          id="license-server-url"
-          aria-label="License server URL"
-          value={draft.license.server_url}
-          onChange={(e) => updateLicense({ server_url: e.target.value })}
-        />
-        <p className="text-xs text-muted-foreground">
-          Leave empty to disable licensing entirely (open-source mode).
-        </p>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <p className="text-sm text-muted-foreground">
-          Status:{" "}
-          <span className="font-medium text-foreground">
-            {status === null ? "…" : formatLicenseStatus(status)}
-          </span>
-        </p>
-        <Button variant="outline" onClick={() => void handleCheck()}>
-          Check now
+      <section className="space-y-3">
+        <h2 className="eyebrow">{t("settings.license.status")}</h2>
+        <div className="space-y-1.5 rounded-md border px-3 py-3">
+          <p className="readout text-sm text-foreground">
+            {status === null ? "…" : formatLicenseStatus(t, status)}
+          </p>
+          {/* Licensing off entirely: the state line already says everything. */}
+          {status?.state !== "disabled" && (
+            <p
+              className={cn(
+                "readout text-xs",
+                status === null ? "text-muted-foreground" : verdictTone(status),
+              )}
+            >
+              {status === null ? "…" : formatServerVerdict(t, status)}
+            </p>
+          )}
+          {checkedAt && (
+            <p className="readout text-[11px] text-muted-foreground">
+              {checkedAt}
+            </p>
+          )}
+          {checkError && (
+            <p role="alert" className="text-xs text-destructive">
+              {t("settings.license.checkError", { error: checkError })}
+            </p>
+          )}
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={checking}
+          onClick={() => void handleCheck()}
+        >
+          {checking ? t("settings.license.checking") : t("settings.license.check")}
         </Button>
-      </div>
+      </section>
+
+      <section className="space-y-5 border-t pt-5">
+        <h2 className="eyebrow">{t("settings.license.credentials")}</h2>
+
+        <div className="space-y-2">
+          <Label htmlFor="license-key">{t("settings.license.key")}</Label>
+          <SecretInput
+            id="license-key"
+            label={t("settings.license.key")}
+            showLabel={t("settings.license.showKey")}
+            hideLabel={t("settings.license.hideKey")}
+            value={draft.license.key}
+            onChange={(key) => updateLicense({ key })}
+          />
+          <p className="text-xs text-muted-foreground">
+            {t("settings.license.keyHint")}
+          </p>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="license-server-url">
+            {t("settings.license.serverUrl")}
+          </Label>
+          <Input
+            id="license-server-url"
+            aria-label={t("settings.license.serverUrl")}
+            className="readout"
+            value={draft.license.server_url}
+            onChange={(e) => updateLicense({ server_url: e.target.value })}
+          />
+          <p className="text-xs text-muted-foreground">
+            {t("settings.license.serverHint")}
+          </p>
+        </div>
+      </section>
     </>
   );
 }

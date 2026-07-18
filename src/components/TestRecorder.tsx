@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { StateChip } from "@/components/StateChip";
 import { useAppState } from "@/hooks/useAppState";
+import { useT } from "@/lib/i18n";
 import { onTranscription, startTestRecording, stopTestRecording } from "@/lib/tauri";
 
 interface TestRecorderProps {
@@ -14,6 +15,7 @@ interface TestRecorderProps {
 /** Scratch dictation test: start/stop buttons, live state chip, transcript. */
 export function TestRecorder({ onTranscript, disabled }: TestRecorderProps) {
   const app = useAppState();
+  const t = useT();
   const [transcript, setTranscript] = useState("");
   const [error, setError] = useState<string | null>(null);
   const onTranscriptRef = useRef(onTranscript);
@@ -40,7 +42,7 @@ export function TestRecorder({ onTranscript, disabled }: TestRecorderProps) {
             onClick={() => void stopTestRecording()}
           >
             <Square />
-            Stop
+            {t("common.test.stop")}
           </Button>
         ) : (
           <Button
@@ -52,10 +54,10 @@ export function TestRecorder({ onTranscript, disabled }: TestRecorderProps) {
             disabled={disabled || app.state === "transcribing"}
           >
             <Mic />
-            Start test
+            {t("common.test.start")}
           </Button>
         )}
-        <StateChip state={app} />
+        <StateChip state={app} className="ml-1" />
       </div>
       {error && (
         <p role="alert" className="text-xs text-destructive">
@@ -63,8 +65,8 @@ export function TestRecorder({ onTranscript, disabled }: TestRecorderProps) {
         </p>
       )}
       <Textarea
-        aria-label="Transcript"
-        placeholder="Your test transcription appears here…"
+        aria-label={t("common.test.transcriptLabel")}
+        placeholder={t("common.test.placeholder")}
         rows={3}
         value={transcript}
         onChange={(e) => {

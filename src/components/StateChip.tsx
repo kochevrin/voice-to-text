@@ -1,35 +1,45 @@
+import { useT } from "@/lib/i18n";
+import type { Key } from "@/lib/i18n";
 import type { AppState, AppStateEvent } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const LABELS: Record<AppState, string> = {
-  idle: "Idle",
-  recording: "Recording…",
-  transcribing: "Transcribing…",
-  error: "Error",
+const LABEL_KEYS: Record<AppState, Key> = {
+  idle: "common.state.idle",
+  recording: "common.state.recording",
+  transcribing: "common.state.transcribing",
+  error: "common.state.error",
 };
 
-export function StateChip({ state }: { state: AppStateEvent }) {
+// State colours only — never the brand accent. The transmission hairline
+// carries the motion, so the dot itself stays still.
+const TONE: Record<AppState, { dot: string; text: string }> = {
+  idle: { dot: "bg-muted-foreground/50", text: "text-muted-foreground" },
+  recording: { dot: "bg-rec", text: "text-rec" },
+  transcribing: { dot: "bg-work", text: "text-work" },
+  error: { dot: "bg-destructive", text: "text-destructive" },
+};
+
+interface StateChipProps {
+  state: AppStateEvent;
+  className?: string;
+}
+
+/** Dot + mono readout. Shares its visual language with the floating pill. */
+export function StateChip({ state, className }: StateChipProps) {
+  const t = useT();
   const s = state.state;
+  const tone = TONE[s];
   return (
     <span
       className={cn(
-        "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium",
-        s === "idle" && "bg-muted text-muted-foreground",
-        s === "recording" && "bg-red-500/15 text-red-400",
-        s === "transcribing" && "bg-amber-500/15 text-amber-400",
-        s === "error" && "bg-destructive/15 text-destructive",
+        "readout inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.12em]",
+        tone.text,
+        className,
       )}
     >
-      <span
-        className={cn(
-          "h-1.5 w-1.5 rounded-full",
-          s === "idle" && "bg-muted-foreground/60",
-          s === "recording" && "animate-pulse bg-red-500",
-          s === "transcribing" && "animate-pulse bg-amber-400",
-          s === "error" && "bg-destructive",
-        )}
-      />
-      {s === "error" ? (state.message ?? "Error") : LABELS[s]}
+      <span className={cn("h-1.5 w-1.5 shrink-0 rounded-full", tone.dot)} />
+      {/* Backend error messages arrive already-worded; they pass through. */}
+      {s === "error" ? (state.message ?? t(LABEL_KEYS.error)) : t(LABEL_KEYS[s])}
     </span>
   );
 }

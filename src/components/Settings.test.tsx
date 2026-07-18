@@ -2,13 +2,25 @@
 // mode, save, remount fresh — both values must be persisted (localStorage
 // backed mock, key "whispr-mock-settings").
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { Settings } from "./Settings";
 import { DEFAULT_SETTINGS } from "@/lib/tauri";
 
 describe("Settings (mock mode)", () => {
+  beforeAll(() => {
+    // jsdom lacks these APIs Radix Select relies on.
+    window.HTMLElement.prototype.scrollIntoView = vi.fn();
+    window.HTMLElement.prototype.hasPointerCapture = vi.fn();
+    window.HTMLElement.prototype.releasePointerCapture = vi.fn();
+    window.ResizeObserver = class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    };
+  });
+
   beforeEach(() => {
     localStorage.clear();
     // Seed a non-default hotkey so the Alt+Space rebind is a real change.
@@ -73,10 +85,11 @@ describe("Settings (mock mode)", () => {
     expect(cloudToggle).toBeChecked();
     await user.type(screen.getByLabelText("API key"), "gsk_test_123");
 
-    // Privacy indicator turns amber with the target base_url.
+    // Privacy indicator turns amber with the target base_url (a .readout span).
     await user.click(screen.getByRole("tab", { name: "Privacy" }));
+    expect(screen.getByText(/audio is sent to/)).toBeInTheDocument();
     expect(
-      screen.getByText(/audio is sent to https:\/\/api\.groq\.com\/openai\/v1/),
+      screen.getByText("https://api.groq.com/openai/v1"),
     ).toBeInTheDocument();
     expect(screen.queryByText(/100% local/)).not.toBeInTheDocument();
 
@@ -186,6 +199,115 @@ describe("Settings (mock mode)", () => {
     expect(
       await screen.findByText("Active until 2027-01-01"),
     ).toBeInTheDocument();
+  });
+
+  it("shows the server verdict line after Check now, saving the typed key first", async () => {
+    const user = userEvent.setup();
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByRole("tab", { name: "License" }));
+    // Trial with no server contact yet: the verdict says so out loud.
+    expect(await screen.findByText("Not verified yet")).toBeInTheDocument();
+
+    // No separate Save — Check now must persist the draft key, then check it.
+    await user.type(screen.getByLabelText("License key"), "WHSPR-TEST-KEY");
+    await user.click(screen.getByRole("button", { name: "Check now" }));
+
+    expect(
+      await screen.findByText("Key active · 365 days left · until 2027-01-01"),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/^Checked \d{1,2}:\d{2}/)).toBeInTheDocument();
+    expect(
+      JSON.parse(localStorage.getItem("whispr-mock-settings") ?? "{}"),
+    ).toMatchObject({ license: { key: "WHSPR-TEST-KEY" } });
+  });
+
+  it("masks the license key behind an eye toggle", async () => {
+    const user = userEvent.setup();
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByRole("tab", { name: "License" }));
+    const key = screen.getByLabelText("License key");
+    expect(key).toHaveAttribute("type", "password");
+
+    await user.click(screen.getByRole("button", { name: "Show license key" }));
+    expect(key).toHaveAttribute("type", "text");
+
+    await user.click(screen.getByRole("button", { name: "Hide license key" }));
+    expect(key).toHaveAttribute("type", "password");
+  });
+
+  it("switches the interface language to Ukrainian and persists it", async () => {
+    const user = userEvent.setup();
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByLabelText("Interface language"));
+    await user.click(await screen.findByRole("option", { name: "Українська" }));
+
+    // The screen previews the picked language right away, before Save.
+    expect(await screen.findByLabelText("Гаряча клавіша")).toHaveValue(
+      "Ctrl+Shift+K",
+    );
+    expect(screen.getByLabelText("Мова інтерфейсу")).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: "Приватність" })).toBeInTheDocument();
+    expect(screen.getByText("Незбережені зміни")).toBeInTheDocument();
+    // The hint keeps interface and dictation languages apart.
+    expect(
+      screen.getByText(/а не мову, якою ви диктуєте/),
+    ).toBeInTheDocument();
+
+    const saveButton = screen.getByRole("button", { name: "Зберегти" });
+    await user.click(saveButton);
+    await waitFor(() => expect(saveButton).toBeDisabled());
+    expect(
+      JSON.parse(localStorage.getItem("whispr-mock-settings") ?? "{}"),
+    ).toMatchObject({ ui_language: "uk" });
+
+    // Machine data stays untranslated on the Transcription tab.
+    await user.click(screen.getByRole("tab", { name: "Розпізнавання" }));
+    expect(screen.getByLabelText("Базовий URL")).toHaveValue(
+      "https://api.groq.com/openai/v1",
+    );
+    expect(screen.getByLabelText("Мова диктування")).toBeInTheDocument();
+  });
+
+  it("opens the Groq how-to from the info button and links to the console", async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByRole("tab", { name: "Transcription" }));
+    await user.click(
+      screen.getByRole("button", { name: "How to get a Groq API key" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByText("Get a free Groq API key"),
+    ).toBeInTheDocument();
+
+    const steps = within(dialog).getAllByRole("listitem");
+    expect(steps).toHaveLength(4);
+    expect(steps[0]).toHaveTextContent(
+      "Open console.groq.com and sign in with Google or GitHub",
+    );
+    expect(steps[1]).toHaveTextContent("Go to API Keys and create a new key.");
+    expect(steps[2]).toHaveTextContent("Copy the key — it is shown only once.");
+    expect(steps[3]).toHaveTextContent(
+      "Paste it into API key here and turn Cloud transcription on.",
+    );
+    expect(
+      within(dialog).getByText(/recorded audio is uploaded to Groq/),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole("button", { name: "Open console.groq.com" }),
+    );
+    expect(open).toHaveBeenCalledWith("https://console.groq.com/keys", "_blank");
   });
 
   afterEach(() => {
