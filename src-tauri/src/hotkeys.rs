@@ -17,7 +17,11 @@ pub fn sync_registration(app: &AppHandle) -> Result<(), String> {
 pub fn apply_registration(app: &AppHandle, hotkey: &str, paused: bool) -> Result<(), String> {
     let shortcuts = app.global_shortcut();
     shortcuts.unregister_all().map_err(|e| e.to_string())?;
-    if !paused {
+    if !paused && shortcuts.register(hotkey).is_err() {
+        // On Windows the OS releases a grab asynchronously, so registering a
+        // combo right after unregistering it can hit the not-yet-released
+        // grab. Wait briefly and retry once before giving up.
+        std::thread::sleep(std::time::Duration::from_millis(150));
         shortcuts
             .register(hotkey)
             .map_err(|e| format!("failed to register hotkey \"{hotkey}\": {e}"))?;

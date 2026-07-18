@@ -35,14 +35,20 @@ pub async fn set_settings(
     }
 
     // Try the new hotkey state before persisting anything, so a combo the OS
-    // rejects doesn't clobber a working one.
+    // rejects doesn't clobber a working one. Skipped when hotkey and paused
+    // are unchanged: there is nothing to re-register, and on Windows tearing
+    // down and instantly re-grabbing the same combo can race the OS's async
+    // grab release and spuriously fail with "hotkey already taken".
     let previous = state.settings.read().unwrap().clone();
-    if let Err(e) = hotkeys::apply_registration(&app, &settings.hotkey, settings.paused) {
-        if let Err(restore) = hotkeys::apply_registration(&app, &previous.hotkey, previous.paused)
-        {
-            tracing::warn!("failed to restore previous hotkey: {restore}");
+    if settings.hotkey != previous.hotkey || settings.paused != previous.paused {
+        if let Err(e) = hotkeys::apply_registration(&app, &settings.hotkey, settings.paused) {
+            if let Err(restore) =
+                hotkeys::apply_registration(&app, &previous.hotkey, previous.paused)
+            {
+                tracing::warn!("failed to restore previous hotkey: {restore}");
+            }
+            return Err(format!("{e}; keeping previous settings"));
         }
-        return Err(format!("{e}; keeping previous settings"));
     }
 
     let stored = {
@@ -125,15 +131,18 @@ pub async fn get_disk_usage(app: AppHandle) -> Result<DiskUsage, String> {
 #[tauri::command]
 pub async fn set_paused(app: AppHandle, paused: bool) -> Result<(), String> {
     // Try the new registration state before persisting it (resuming can fail
-    // when the hotkey is grabbed by another app).
+    // when the hotkey is grabbed by another app). Skipped when paused is
+    // unchanged — re-registering the same combo is racy on Windows.
     let previous = state::current_settings(&app);
-    if let Err(e) = hotkeys::apply_registration(&app, &previous.hotkey, paused) {
-        if let Err(restore) =
-            hotkeys::apply_registration(&app, &previous.hotkey, previous.paused)
-        {
-            tracing::warn!("failed to restore previous hotkey: {restore}");
+    if paused != previous.paused {
+        if let Err(e) = hotkeys::apply_registration(&app, &previous.hotkey, paused) {
+            if let Err(restore) =
+                hotkeys::apply_registration(&app, &previous.hotkey, previous.paused)
+            {
+                tracing::warn!("failed to restore previous hotkey: {restore}");
+            }
+            return Err(format!("{e}; keeping previous settings"));
         }
-        return Err(format!("{e}; keeping previous settings"));
     }
     let settings = {
         let state = app.state::<AppState>();
