@@ -4,6 +4,7 @@ mod audio;
 mod cloud;
 mod commands;
 mod hotkeys;
+mod i18n;
 mod inject;
 mod license;
 mod models;
@@ -88,7 +89,7 @@ pub fn run() {
             commands::get_disk_usage,
             commands::set_paused,
             commands::open_permission_settings,
-            commands::open_repo,
+            commands::open_url,
             commands::get_license_status,
             commands::check_license_now,
         ])

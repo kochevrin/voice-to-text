@@ -83,6 +83,17 @@ pub fn current_settings(app: &AppHandle) -> Settings {
     app.state::<AppState>().settings.read().unwrap().clone()
 }
 
+/// The interface language for user-facing messages (`crate::i18n`). Separate
+/// from the dictation language in `Settings::language`.
+pub fn ui_language(app: &AppHandle) -> String {
+    app.state::<AppState>()
+        .settings
+        .read()
+        .unwrap()
+        .ui_language
+        .clone()
+}
+
 pub fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

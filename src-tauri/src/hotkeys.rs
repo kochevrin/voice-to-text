@@ -3,6 +3,7 @@
 use tauri::AppHandle;
 use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 
+use crate::i18n::{self, Msg};
 use crate::session;
 use crate::state::{self, Phase};
 
@@ -22,9 +23,11 @@ pub fn apply_registration(app: &AppHandle, hotkey: &str, paused: bool) -> Result
         // combo right after unregistering it can hit the not-yet-released
         // grab. Wait briefly and retry once before giving up.
         std::thread::sleep(std::time::Duration::from_millis(150));
-        shortcuts
-            .register(hotkey)
-            .map_err(|e| format!("failed to register hotkey \"{hotkey}\": {e}"))?;
+        shortcuts.register(hotkey).map_err(|e| {
+            i18n::t(&state::ui_language(app), Msg::HotkeyRegisterFailed)
+                .replace("{hotkey}", hotkey)
+                .replace("{detail}", &e.to_string())
+        })?;
     }
     Ok(())
 }

@@ -7,24 +7,31 @@ use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager};
-use whispr_core::license::{evaluate, CachedCheck, LicenseState, DAY_MS, TRIAL_MS};
+use whispr_core::license::{
+    evaluate, subscription_days_left, CachedCheck, LicenseState, DAY_MS, TRIAL_MS,
+};
 
+use crate::i18n::{self, Msg};
 use crate::state::{self, AppState};
 
 const CHECK_TIMEOUT: Duration = Duration::from_secs(15);
 const CHECK_INTERVAL: Duration = Duration::from_secs(3600);
 
-/// Notification body when a check flips the effective state to inactive.
-const INACTIVE_NOTICE: &str = "Subscription inactive — dictation disabled";
-
-/// Refusal message when a recording start is blocked.
-pub const BLOCKED_MESSAGE: &str = "Subscription inactive — renew to keep dictating";
-
 /// The `LicenseStatus` IPC shape (contract: `get_license_status`).
+///
+/// `state` is the effective verdict, which the trial can mask: during the
+/// 7-day trial it stays `trial` whatever the server says. `server_active` and
+/// `days_left` therefore report the cached server verdict itself, so the UI
+/// can show what a check actually returned even while the trial runs.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct LicenseStatus {
     pub state: &'static str,
     pub trial_days_left: Option<u64>,
+    /// The cached server verdict; `None` when no check ever succeeded.
+    pub server_active: Option<bool>,
+    /// Days left on the subscription per the cached `expires` date; `None`
+    /// when there is no usable date. Independent of `trial_days_left`.
+    pub days_left: Option<u64>,
     pub expires: Option<String>,
     pub last_checked_ms: Option<u64>,
 }
@@ -151,6 +158,8 @@ fn build_status(
     LicenseStatus {
         state: license_state.as_str(),
         trial_days_left,
+        server_active: cache.map(|c| c.active),
+        days_left: subscription_days_left(cache.and_then(|c| c.expires.as_deref()), now_ms),
         expires: cache.and_then(|c| c.expires.clone()),
         last_checked_ms: cache.map(|c| c.checked_at_ms),
     }
@@ -183,7 +192,7 @@ pub fn current_status(app: &AppHandle) -> LicenseStatus {
 /// message when the effective state is `Inactive`.
 pub fn ensure_can_dictate(app: &AppHandle) -> Result<(), String> {
     if current_state(app) == LicenseState::Inactive {
-        Err(BLOCKED_MESSAGE.to_string())
+        Err(i18n::t(&state::ui_language(app), Msg::LicenseBlocked).to_string())
     } else {
         Ok(())
     }
@@ -203,7 +212,8 @@ fn note_state_transition(app: &AppHandle) {
         guard.replace(new_state)
     };
     if new_state == LicenseState::Inactive && previous != Some(LicenseState::Inactive) {
-        state::notify(app, "whispr-open", INACTIVE_NOTICE);
+        let notice = i18n::t(&state::ui_language(app), Msg::LicenseInactiveNotice);
+        state::notify(app, "whispr-open", notice);
     }
 }
 
@@ -216,16 +226,17 @@ pub async fn run_check(app: &AppHandle) {
     if !server_url.is_empty() {
         match fetch_check(&server_url, &settings.license.key).await {
             Ok(check) => store_check(app, check),
-            Err(e) => tracing::warn!("license check failed: {e}"),
+            Err(e) => tracing::warn!("license check failed, keeping cached verdict: {e}"),
         }
     }
     note_state_transition(app);
 }
 
-/// `check_license_now` command path: forces a check and returns the fresh
-/// status. Never a hard error — with an empty URL nothing is fetched
-/// (disabled status), and fetch failures fall back to the cached/trial
-/// status.
+/// `check_license_now` command path: forces a check, then reads the status
+/// back so the caller always sees the cache as it stands after the fetch.
+/// Never a hard error — with an empty URL nothing is fetched (disabled
+/// status), and a failed fetch only logs at warn and adds nothing new, so
+/// `server_active` / `days_left` keep their last known values.
 pub async fn check_now(app: &AppHandle) -> LicenseStatus {
     run_check(app).await;
     current_status(app)
@@ -314,9 +325,81 @@ mod tests {
     }
 
     #[test]
+    fn status_reports_server_verdict_during_trial() {
+        // The trial masks the effective state, but the cached server verdict
+        // still surfaces — that is what lets "Check now" change the UI.
+        let cache = CachedCheck {
+            active: true,
+            expires: Some("1970-02-01".to_string()),
+            checked_at_ms: 99,
+        };
+        let status = build_status(false, 0, 0, Some(&cache));
+        assert_eq!(status.state, "trial");
+        assert_eq!(status.trial_days_left, Some(7));
+        assert_eq!(status.server_active, Some(true));
+        // now is 1970-01-01, so 1970-02-01 is 31 days out.
+        assert_eq!(status.days_left, Some(31));
+        assert_eq!(status.expires.as_deref(), Some("1970-02-01"));
+        assert_eq!(status.last_checked_ms, Some(99));
+    }
+
+    #[test]
+    fn status_reports_negative_server_verdict_during_trial() {
+        let cache = CachedCheck {
+            active: false,
+            expires: None,
+            checked_at_ms: 5,
+        };
+        let status = build_status(false, 0, DAY_MS, Some(&cache));
+        assert_eq!(status.state, "trial");
+        assert_eq!(status.trial_days_left, Some(6));
+        assert_eq!(status.server_active, Some(false));
+        assert_eq!(status.days_left, None);
+    }
+
+    #[test]
+    fn status_server_fields_null_without_a_successful_check() {
+        let status = build_status(false, 0, 0, None);
+        assert_eq!(status.server_active, None);
+        assert_eq!(status.days_left, None);
+        let status = build_status(true, 0, 0, None);
+        assert_eq!(status.server_active, None);
+        assert_eq!(status.days_left, None);
+    }
+
+    #[test]
+    fn status_days_left_tracks_a_real_expiry_date() {
+        // 2026-07-18 UTC as days since the epoch.
+        const TODAY_MS: u64 = 20_652 * DAY_MS;
+        let cache = CachedCheck {
+            active: true,
+            expires: Some("2026-08-01".to_string()),
+            checked_at_ms: 1,
+        };
+        let status = build_status(false, 0, TODAY_MS, Some(&cache));
+        assert_eq!(status.state, "active");
+        assert_eq!(status.trial_days_left, None);
+        assert_eq!(status.days_left, Some(14));
+        // A date already past floors at 0 instead of going negative.
+        let expired = CachedCheck {
+            expires: Some("2026-07-01".to_string()),
+            ..cache
+        };
+        let status = build_status(false, 0, TODAY_MS, Some(&expired));
+        assert_eq!(status.days_left, Some(0));
+    }
+
+    #[test]
     fn status_serializes_contract_field_names() {
         let json = serde_json::to_value(build_status(false, 0, 0, None)).unwrap();
-        for key in ["state", "trial_days_left", "expires", "last_checked_ms"] {
+        for key in [
+            "state",
+            "trial_days_left",
+            "server_active",
+            "days_left",
+            "expires",
+            "last_checked_ms",
+        ] {
             assert!(json.get(key).is_some(), "missing key {key}");
         }
     }

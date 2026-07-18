@@ -7,6 +7,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use whispr_core::{model_download_url, model_size_bytes, MODEL_IDS};
 
+use crate::i18n::{self, Msg};
 use crate::state::{self, AppState};
 
 const PROGRESS_EVERY_BYTES: u64 = 500 * 1024;
@@ -34,11 +35,11 @@ fn model_file(app: &AppHandle, id: &str) -> Result<PathBuf, String> {
     Ok(state::models_dir(app)?.join(format!("ggml-{id}.bin")))
 }
 
-fn validate_id(id: &str) -> Result<(), String> {
+fn validate_id(app: &AppHandle, id: &str) -> Result<(), String> {
     if MODEL_IDS.contains(&id) {
         Ok(())
     } else {
-        Err(format!("unknown model id: {id}"))
+        Err(i18n::t(&state::ui_language(app), Msg::UnknownModelId).replace("{id}", id))
     }
 }
 
@@ -82,12 +83,13 @@ impl Drop for DownloadGuard {
 /// roughly every 500 KB, then renames into place. Rejects a second download
 /// of an id that is already in flight.
 pub async fn download_model(app: &AppHandle, id: &str) -> Result<(), String> {
-    validate_id(id)?;
+    validate_id(app, id)?;
+    let lang = state::ui_language(app);
     {
         let state = app.state::<AppState>();
         let mut in_flight = state.downloads.lock().unwrap();
         if !in_flight.insert(id.to_string()) {
-            return Err(format!("model \"{id}\" is already downloading"));
+            return Err(i18n::t(&lang, Msg::ModelAlreadyDownloading).replace("{id}", id));
         }
     }
     let _in_flight = DownloadGuard {
@@ -136,7 +138,8 @@ async fn download_to(
 
     let resp = reqwest::get(url).await.map_err(|e| e.to_string())?;
     if !resp.status().is_success() {
-        return Err(format!("download failed: HTTP {}", resp.status()));
+        return Err(i18n::t(&state::ui_language(app), Msg::DownloadFailed)
+            .replace("{status}", &resp.status().to_string()));
     }
     let total = resp.content_length().unwrap_or_else(|| model_size_bytes(id));
 
@@ -176,7 +179,7 @@ async fn download_to(
 }
 
 pub fn delete_model(app: &AppHandle, id: &str) -> Result<(), String> {
-    validate_id(id)?;
+    validate_id(app, id)?;
     let path = model_file(app, id)?;
     if path.is_file() {
         std::fs::remove_file(&path).map_err(|e| e.to_string())?;

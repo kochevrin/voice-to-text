@@ -95,6 +95,10 @@ pub struct Settings {
     /// When false, new transcriptions are not added to history.
     #[serde(default = "default_true")]
     pub history_enabled: bool,
+    /// Interface language: `"en"` | `"uk"`. Independent of [`Settings::language`],
+    /// which selects the dictation language.
+    #[serde(default = "default_ui_language")]
+    pub ui_language: String,
     #[serde(default)]
     pub license: LicenseSettings,
     #[serde(default)]
@@ -117,6 +121,7 @@ impl Default for Settings {
             postproc: PostprocSettings::default(),
             cloud: CloudSettings::default(),
             history_enabled: true,
+            ui_language: default_ui_language(),
             license: LicenseSettings::default(),
             onboarding_done: false,
             paused: false,
@@ -138,6 +143,10 @@ fn default_model() -> String {
 
 fn default_language() -> String {
     "auto".to_string()
+}
+
+fn default_ui_language() -> String {
+    "en".to_string()
 }
 
 fn default_silence_timeout_ms() -> u32 {
@@ -220,6 +229,7 @@ mod tests {
         assert!(s.vad_enabled);
         assert!(s.pill_enabled);
         assert!(s.history_enabled);
+        assert_eq!(s.ui_language, "en");
         assert!(!s.onboarding_done);
         assert!(!s.paused);
 
@@ -254,6 +264,7 @@ mod tests {
         s.cloud.api_key = "gsk_test".to_string();
         s.cloud.fallback_to_local = false;
         s.history_enabled = false;
+        s.ui_language = "uk".to_string();
         s.license.key = "WSPR-TEST-KEY".to_string();
         s.license.server_url = "https://license.example.com".to_string();
         let json = serde_json::to_string(&s).unwrap();
@@ -285,8 +296,18 @@ mod tests {
         assert_eq!(s.cloud, CloudSettings::default());
         // A pre-history_enabled settings.json keeps history on.
         assert!(s.history_enabled);
+        // A pre-ui_language settings.json gets the English interface.
+        assert_eq!(s.ui_language, "en");
         // A pre-license settings.json gets the license defaults (default server URL).
         assert_eq!(s.license, LicenseSettings::default());
+    }
+
+    #[test]
+    fn ui_language_is_independent_of_the_dictation_language() {
+        let s: Settings =
+            serde_json::from_str(r#"{"ui_language":"uk","language":"en"}"#).unwrap();
+        assert_eq!(s.ui_language, "uk");
+        assert_eq!(s.language, "en");
     }
 
     #[test]
@@ -345,6 +366,7 @@ mod tests {
             "postproc",
             "cloud",
             "history_enabled",
+            "ui_language",
             "license",
             "onboarding_done",
             "paused",

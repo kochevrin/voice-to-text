@@ -6,6 +6,7 @@ use tauri::menu::{CheckMenuItem, Menu, MenuBuilder, MenuItem, SubmenuBuilder};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, Wry};
 
+use crate::i18n::{self, Msg};
 use crate::state::{self, AppState, HistoryEntry, Phase, RecorderSlot};
 use crate::{hotkeys, session};
 
@@ -94,12 +95,24 @@ fn build_menu(
     history: &[HistoryEntry],
     paused: bool,
 ) -> tauri::Result<Menu<Wry>> {
-    let settings_item = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
+    let lang = state::ui_language(app);
+    let settings_item = MenuItem::with_id(
+        app,
+        "settings",
+        i18n::t(&lang, Msg::TraySettings),
+        true,
+        None::<&str>,
+    )?;
 
-    let mut recent = SubmenuBuilder::new(app, "Recent transcriptions");
+    let mut recent = SubmenuBuilder::new(app, i18n::t(&lang, Msg::TrayRecent));
     if history.is_empty() {
-        let empty =
-            MenuItem::with_id(app, "recent-empty", "(no transcriptions yet)", false, None::<&str>)?;
+        let empty = MenuItem::with_id(
+            app,
+            "recent-empty",
+            i18n::t(&lang, Msg::TrayRecentEmpty),
+            false,
+            None::<&str>,
+        )?;
         recent = recent.item(&empty);
     } else {
         for (i, entry) in history.iter().enumerate() {
@@ -115,9 +128,16 @@ fn build_menu(
     }
     let recent = recent.build()?;
 
-    let pause_item =
-        CheckMenuItem::with_id(app, "pause", "Pause hotkey", true, paused, None::<&str>)?;
-    let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
+    let pause_item = CheckMenuItem::with_id(
+        app,
+        "pause",
+        i18n::t(&lang, Msg::TrayPause),
+        true,
+        paused,
+        None::<&str>,
+    )?;
+    let quit_item =
+        MenuItem::with_id(app, "quit", i18n::t(&lang, Msg::TrayQuit), true, None::<&str>)?;
 
     MenuBuilder::new(app)
         .item(&settings_item)
@@ -187,7 +207,10 @@ fn copy_recent(app: &AppHandle, idx: usize) {
     };
     if let Some(text) = text {
         match state::copy_to_clipboard(app, &text) {
-            Ok(()) => state::notify(app, "whispr-open", "Transcript copied to clipboard"),
+            Ok(()) => {
+                let notice = i18n::t(&state::ui_language(app), Msg::TranscriptCopied);
+                state::notify(app, "whispr-open", notice);
+            }
             Err(e) => tracing::warn!("failed to copy transcript: {e}"),
         }
     }

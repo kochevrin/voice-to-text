@@ -5,6 +5,7 @@ use std::path::Path;
 
 use tauri::{AppHandle, Emitter, Manager};
 
+use crate::i18n::{self, Msg};
 use crate::recorder::{self, RecorderConfig, RecorderHandle};
 use crate::state::{self, AppState, Phase, RecorderSlot, TranscriptionPayload};
 use crate::{cloud, inject, license, pill, postproc, tray, whisper};
@@ -114,7 +115,9 @@ pub fn start_recording_detached(app: &AppHandle, test: bool) {
         };
         if let Err(e) = result {
             tracing::warn!("failed to start recording: {e}");
-            state::notify(&app, "whispr-open", &format!("Could not start recording: {e}"));
+            let message = i18n::t(&state::ui_language(&app), Msg::StartRecordingFailed)
+                .replace("{detail}", &e);
+            state::notify(&app, "whispr-open", &message);
         }
     });
 }
@@ -164,11 +167,11 @@ pub async fn finish_recording(app: AppHandle) {
     let samples = match tauri::async_runtime::spawn_blocking(move || handle.stop()).await {
         Ok(Ok(samples)) => samples,
         Ok(Err(e)) => {
-            fail(&app, format!("recording failed: {e}")).await;
+            fail(&app, Msg::RecordingFailed, &e).await;
             return;
         }
         Err(e) => {
-            fail(&app, format!("recording failed: {e}")).await;
+            fail(&app, Msg::RecordingFailed, &e.to_string()).await;
             return;
         }
     };
@@ -189,11 +192,11 @@ pub async fn finish_recording(app: AppHandle) {
     match write_result {
         Ok(Ok(())) => {}
         Ok(Err(e)) => {
-            fail(&app, format!("failed to write recording: {e}")).await;
+            fail(&app, Msg::WriteRecordingFailed, &e).await;
             return;
         }
         Err(e) => {
-            fail(&app, format!("failed to write recording: {e}")).await;
+            fail(&app, Msg::WriteRecordingFailed, &e.to_string()).await;
             return;
         }
     }
@@ -202,9 +205,10 @@ pub async fn finish_recording(app: AppHandle) {
     let _ = tokio::fs::remove_file(&wav).await;
 
     let raw = match transcript {
+        // Transcription errors are already in the interface language.
         Ok(text) => text,
         Err(e) => {
-            fail(&app, e).await;
+            report(&app, e).await;
             return;
         }
     };
@@ -259,7 +263,15 @@ pub async fn transcribe(app: &AppHandle, wav: &Path) -> Result<String, String> {
     whisper::transcribe(app, wav).await
 }
 
-async fn fail(app: &AppHandle, message: String) {
+/// Localizes a pipeline failure (`detail` is untranslated technical text) and
+/// reports it.
+async fn fail(app: &AppHandle, key: Msg, detail: &str) {
+    let message = i18n::t(&state::ui_language(app), key).replace("{detail}", detail);
+    report(app, message).await;
+}
+
+/// Notifies + moves to `Phase::Error` with an already user-facing message.
+async fn report(app: &AppHandle, message: String) {
     tracing::warn!("recording pipeline failed: {message}");
     state::notify(app, "whispr-open", &message);
     state::set_phase(app, Phase::Error, Some(message));

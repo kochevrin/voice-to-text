@@ -7,6 +7,8 @@ use std::time::Duration;
 use serde::Deserialize;
 use whispr_core::Settings;
 
+use crate::i18n::{self, Msg};
+
 const CLOUD_TIMEOUT: Duration = Duration::from_secs(30);
 
 /// Max chars of the response body kept in error messages.
@@ -45,9 +47,10 @@ fn body_tail(body: &str) -> &str {
 /// POSTs the recorded WAV to `{base_url}/audio/transcriptions` and returns
 /// the trimmed transcript.
 pub async fn transcribe(settings: &Settings, wav: &Path) -> Result<String, String> {
-    let bytes = tokio::fs::read(wav)
-        .await
-        .map_err(|e| format!("failed to read recording: {e}"))?;
+    let lang = settings.ui_language.as_str();
+    let bytes = tokio::fs::read(wav).await.map_err(|e| {
+        i18n::t(lang, Msg::CloudReadFailed).replace("{detail}", &e.to_string())
+    })?;
 
     let file = reqwest::multipart::Part::bytes(bytes)
         .file_name("audio.wav")
@@ -71,20 +74,20 @@ pub async fn transcribe(settings: &Settings, wav: &Path) -> Result<String, Strin
         .multipart(form)
         .send()
         .await
-        .map_err(|e| format!("cloud transcription request failed: {e}"))?;
+        .map_err(|e| {
+            i18n::t(lang, Msg::CloudRequestFailed).replace("{detail}", &e.to_string())
+        })?;
 
     let status = resp.status();
     if !status.is_success() {
         let body = resp.text().await.unwrap_or_default();
-        return Err(format!(
-            "cloud transcription failed with {status}: {}",
-            body_tail(&body)
-        ));
+        return Err(i18n::t(lang, Msg::CloudFailedWithStatus)
+            .replace("{status}", &status.to_string())
+            .replace("{detail}", body_tail(&body)));
     }
-    let parsed: TranscriptionResponse = resp
-        .json()
-        .await
-        .map_err(|e| format!("cloud transcription returned invalid JSON: {e}"))?;
+    let parsed: TranscriptionResponse = resp.json().await.map_err(|e| {
+        i18n::t(lang, Msg::CloudInvalidJson).replace("{detail}", &e.to_string())
+    })?;
     Ok(parsed.text.trim().to_string())
 }
 

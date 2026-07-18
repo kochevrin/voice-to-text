@@ -4,6 +4,7 @@
 use tauri::AppHandle;
 use whispr_core::{build_inject_plan, InjectMethod};
 
+use crate::i18n::{self, Msg};
 use crate::state;
 
 #[cfg(target_os = "linux")]
@@ -73,22 +74,21 @@ pub async fn inject_text(app: &AppHandle, text: &str) -> bool {
 }
 
 fn clipboard_fallback(app: &AppHandle, text: &str, partially_typed: bool) {
+    let lang = state::ui_language(app);
     match state::copy_to_clipboard(app, text) {
         Ok(()) => {
             let paste_key = if cfg!(target_os = "macos") { "Cmd+V" } else { "Ctrl+V" };
-            let message = if partially_typed {
-                format!(
-                    "Typing was interrupted — part of the text may already be typed; \
-                     the rest was copied, press {paste_key} to paste"
-                )
+            let key = if partially_typed {
+                Msg::TypingInterrupted
             } else {
-                format!("Transcript copied — press {paste_key} to paste")
+                Msg::TranscriptCopiedPressToPaste
             };
+            let message = i18n::t(&lang, key).replace("{key}", paste_key);
             state::notify(app, "whispr-open", &message);
         }
         Err(e) => {
             tracing::warn!("clipboard fallback failed: {e}");
-            state::notify(app, "whispr-open", "Could not copy transcript to clipboard");
+            state::notify(app, "whispr-open", i18n::t(&lang, Msg::ClipboardCopyFailed));
         }
     }
 }

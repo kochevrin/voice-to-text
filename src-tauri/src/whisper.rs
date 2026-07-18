@@ -6,10 +6,8 @@ use std::path::{Path, PathBuf};
 use tauri::AppHandle;
 use whispr_core::effective_model_id;
 
+use crate::i18n::{self, Msg};
 use crate::state;
-
-const SIDECAR_HINT: &str =
-    "whisper-cli sidecar not found — build it with sidecar/whisper/build-<os>.sh and restart the app";
 
 fn host_triple() -> &'static str {
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -37,6 +35,9 @@ const EXE_SUFFIX: &str = if cfg!(windows) { ".exe" } else { "" };
 /// Resolves the whisper-cli sidecar. In a bundled app Tauri places it next to
 /// the main executable under its plain name; in dev we fall back to the
 /// workspace `binaries/whisper-cli-<host-triple>` file.
+///
+/// The "not found" hint is English here (there is no app handle); [`transcribe`]
+/// re-states it in the interface language.
 pub fn sidecar_path() -> Result<PathBuf, String> {
     if let Ok(exe) = std::env::current_exe() {
         if let Some(dir) = exe.parent() {
@@ -52,7 +53,7 @@ pub fn sidecar_path() -> Result<PathBuf, String> {
     if dev.is_file() {
         return Ok(dev);
     }
-    Err(SIDECAR_HINT.to_string())
+    Err(i18n::t("en", Msg::SidecarMissing).to_string())
 }
 
 /// Builds the whisper-cli argument list. Pure — unit tested.
@@ -82,25 +83,36 @@ fn thread_count() -> usize {
 /// Model and language come from the current settings.
 pub async fn transcribe(app: &AppHandle, wav: &Path) -> Result<String, String> {
     let settings = state::current_settings(app);
+    let ui_lang = settings.ui_language.clone();
     let model_id = effective_model_id(&settings.model, &settings.language);
     let model_path = state::models_dir(app)?.join(format!("ggml-{model_id}.bin"));
     if !model_path.is_file() {
-        return Err(format!(
-            "model \"{model_id}\" is not downloaded — open Settings and download it first"
-        ));
+        return Err(i18n::t(&ui_lang, Msg::ModelNotDownloaded).replace("{id}", &model_id));
     }
-    let bin = sidecar_path()?;
-    run_whisper(&bin, &model_path, wav, &settings.language).await
+    let bin = sidecar_path().map_err(|_| i18n::t(&ui_lang, Msg::SidecarMissing).to_string())?;
+    run(&bin, &model_path, wav, &settings.language, &ui_lang).await
 }
 
-/// Spawns whisper-cli with explicit paths and returns the trimmed transcript.
-/// Split out of [`transcribe`] so the pipeline self-test can exercise the real
-/// sidecar invocation without a running Tauri app.
+/// Spawns whisper-cli with explicit paths and returns the trimmed transcript,
+/// reporting failures in English. Split out of [`transcribe`] so the pipeline
+/// self-test can exercise the real sidecar invocation without a running Tauri
+/// app.
 pub async fn run_whisper(
     bin: &Path,
     model: &Path,
     wav: &Path,
     language: &str,
+) -> Result<String, String> {
+    run(bin, model, wav, language, "en").await
+}
+
+/// [`run_whisper`] with the interface language for its error messages.
+async fn run(
+    bin: &Path,
+    model: &Path,
+    wav: &Path,
+    language: &str,
+    ui_lang: &str,
 ) -> Result<String, String> {
     let args = build_args(model, wav, language, thread_count());
 
@@ -109,10 +121,9 @@ pub async fn run_whisper(
     #[cfg(windows)]
     cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
 
-    let output = cmd
-        .output()
-        .await
-        .map_err(|e| format!("failed to run whisper-cli: {e}"))?;
+    let output = cmd.output().await.map_err(|e| {
+        i18n::t(ui_lang, Msg::WhisperSpawnFailed).replace("{detail}", &e.to_string())
+    })?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
         let tail: String = stderr
@@ -124,10 +135,9 @@ pub async fn run_whisper(
             .rev()
             .collect::<Vec<_>>()
             .join(" | ");
-        return Err(format!(
-            "whisper-cli exited with {}: {}",
-            output.status, tail
-        ));
+        return Err(i18n::t(ui_lang, Msg::WhisperExited)
+            .replace("{status}", &output.status.to_string())
+            .replace("{detail}", &tail));
     }
     Ok(String::from_utf8_lossy(&output.stdout).trim().to_string())
 }

@@ -5,16 +5,19 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager, State};
 use whispr_core::{normalize_hotkey, HotkeyError, Settings, MODEL_IDS};
 
+use crate::i18n::{self, Msg};
 use crate::models::{self, DiskUsage, ModelInfo};
 use crate::state::{self, AppState, HistoryEntry};
 use crate::{audio, hotkeys, license, postproc, session, tray};
 
-fn hotkey_error_message(err: HotkeyError) -> String {
+fn hotkey_error_message(lang: &str, err: HotkeyError) -> String {
     match err {
-        HotkeyError::Empty => "hotkey must not be empty".to_string(),
-        HotkeyError::NoKey => "hotkey needs a non-modifier key".to_string(),
-        HotkeyError::UnknownToken(token) => format!("unknown key \"{token}\" in hotkey"),
-        HotkeyError::NoModifier => "hotkey needs at least one modifier".to_string(),
+        HotkeyError::Empty => i18n::t(lang, Msg::HotkeyEmpty).to_string(),
+        HotkeyError::NoKey => i18n::t(lang, Msg::HotkeyNoKey).to_string(),
+        HotkeyError::UnknownToken(token) => {
+            i18n::t(lang, Msg::HotkeyUnknownToken).replace("{token}", &token)
+        }
+        HotkeyError::NoModifier => i18n::t(lang, Msg::HotkeyNoModifier).to_string(),
     }
 }
 
@@ -29,9 +32,18 @@ pub async fn set_settings(
     state: State<'_, AppState>,
     mut settings: Settings,
 ) -> Result<Settings, String> {
-    settings.hotkey = normalize_hotkey(&settings.hotkey).map_err(hotkey_error_message)?;
+    let previous = state.settings.read().unwrap().clone();
+    // A rejected request applies nothing, so the interface the user is looking
+    // at keeps the language stored before the call: report every error in it.
+    let lang = previous.ui_language.clone();
+
+    if !i18n::UI_LANGUAGES.contains(&settings.ui_language.as_str()) {
+        return Err(i18n::t(&lang, Msg::UnknownUiLanguage).replace("{lang}", &settings.ui_language));
+    }
+    settings.hotkey =
+        normalize_hotkey(&settings.hotkey).map_err(|e| hotkey_error_message(&lang, e))?;
     if !MODEL_IDS.contains(&settings.model.as_str()) {
-        return Err(format!("unknown model: {}", settings.model));
+        return Err(i18n::t(&lang, Msg::UnknownModel).replace("{model}", &settings.model));
     }
 
     // Try the new hotkey state before persisting anything, so a combo the OS
@@ -39,7 +51,6 @@ pub async fn set_settings(
     // are unchanged: there is nothing to re-register, and on Windows tearing
     // down and instantly re-grabbing the same combo can race the OS's async
     // grab release and spuriously fail with "hotkey already taken".
-    let previous = state.settings.read().unwrap().clone();
     if settings.hotkey != previous.hotkey || settings.paused != previous.paused {
         if let Err(e) = hotkeys::apply_registration(&app, &settings.hotkey, settings.paused) {
             if let Err(restore) =
@@ -47,7 +58,7 @@ pub async fn set_settings(
             {
                 tracing::warn!("failed to restore previous hotkey: {restore}");
             }
-            return Err(format!("{e}; keeping previous settings"));
+            return Err(i18n::t(&lang, Msg::KeepingPreviousSettings).replace("{detail}", &e));
         }
     }
 
@@ -106,7 +117,8 @@ pub async fn stop_test_recording(app: AppHandle) -> Result<(), String> {
 pub async fn transcribe_wav(app: AppHandle, path: String) -> Result<String, String> {
     let wav = PathBuf::from(path);
     if !wav.is_file() {
-        return Err(format!("no such file: {}", wav.display()));
+        return Err(i18n::t(&state::ui_language(&app), Msg::NoSuchFile)
+            .replace("{path}", &wav.display().to_string()));
     }
     let raw = session::transcribe(&app, &wav).await?;
     let settings = state::current_settings(&app);
@@ -149,7 +161,8 @@ pub async fn set_paused(app: AppHandle, paused: bool) -> Result<(), String> {
             {
                 tracing::warn!("failed to restore previous hotkey: {restore}");
             }
-            return Err(format!("{e}; keeping previous settings"));
+            return Err(i18n::t(&previous.ui_language, Msg::KeepingPreviousSettings)
+                .replace("{detail}", &e));
         }
     }
     let settings = {
@@ -185,10 +198,17 @@ pub async fn open_permission_settings() -> Result<(), String> {
     Ok(())
 }
 
+/// Opens an external URL in the default browser. Only `https://` is accepted:
+/// the UI passes fixed destinations (author profile, Groq console, docs), and
+/// refusing every other scheme keeps the command from becoming a way to launch
+/// arbitrary handlers. The refusal is not translated — the command takes no
+/// app handle, and it only fires on a caller bug, never on user input.
 #[tauri::command]
-pub async fn open_repo() -> Result<(), String> {
-    tauri_plugin_opener::open_url("https://github.com/kochevrin/voice-to-text", None::<&str>)
-        .map_err(|e| e.to_string())
+pub async fn open_url(url: String) -> Result<(), String> {
+    if !url.starts_with("https://") {
+        return Err("only https URLs can be opened".to_string());
+    }
+    tauri_plugin_opener::open_url(url, None::<&str>).map_err(|e| e.to_string())
 }
 
 #[tauri::command]

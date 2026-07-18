@@ -33,6 +33,7 @@ TS mirror: `src/lib/types.ts` → `Settings`.
     "fallback_to_local": true
   },
   "history_enabled": true,
+  "ui_language": "en",              // "en" | "uk" — interface language
   "license": { "key": "", "server_url": "https://license.kk-lab.net" },
   "onboarding_done": false,
   "paused": false
@@ -68,8 +69,16 @@ change; cache persisted in `license.json` `{installed_at_ms, last: {active,
 expires, checked_at_ms}}`.
 
 Commands:
-| `get_license_status` | – | `LicenseStatus` | `{ state: "disabled"\|"trial"\|"active"\|"inactive"\|"unverified", trial_days_left: number\|null, expires: string\|null, last_checked_ms: number\|null }` |
-| `check_license_now` | – | `LicenseStatus` | Forces a server fetch, updates the cache, returns the fresh status. Errors (unreachable) still return a status (from cache/trial). |
+| `get_license_status` | – | `LicenseStatus` | `{ state: "disabled"\|"trial"\|"active"\|"inactive"\|"unverified", trial_days_left: number\|null, server_active: boolean\|null, days_left: number\|null, expires: string\|null, last_checked_ms: number\|null }` |
+| `check_license_now` | – | `LicenseStatus` | Forces a server fetch, updates the cache, returns the fresh status. Errors (unreachable) still return a status (from cache/trial) — never a hard error; the failure only logs at warn and the cached fields stand. |
+
+`state` is the *effective* verdict and the trial masks it: during the 7-day
+trial `state` stays `"trial"` no matter what the server said. `server_active`
+is the cached server verdict itself (`null` until a check first succeeds), and
+`days_left` is the subscription remainder computed from `expires` vs today
+(UTC calendar days, rounded up, floored at 0, `null` without a usable date).
+Those two are what change after "Check now" while the trial is still running;
+`days_left` is about the key and is independent of `trial_days_left`.
 
 UI: Settings gains a "License" tab — key input, server URL input, status line,
 "Check now" button. Mock: state `trial` with 5 days left; `check_license_now`
@@ -129,7 +138,7 @@ Rules:
 | `get_disk_usage` | – | `{ models_bytes: number }` | |
 | `set_paused` | `{ paused: boolean }` | `null` | Pause/resume global hotkey. |
 | `open_permission_settings` | – | `null` | macOS: deep-link to Accessibility pane; Windows: microphone privacy settings; Linux: no-op. |
-| `open_repo` | – | `null` | Opens the project GitHub page (https://github.com/kochevrin/voice-to-text) in the default browser. Mock: `window.open`. |
+| `open_url` | `{ url: string }` | `null` | Opens an external `https://` URL in the default browser (author profile, Groq console, docs). Rejects anything that is not `https://`. Mock: `window.open`. Replaces the former `open_repo`. |
 
 Command errors are strings (Tauri default `Result<T, String>`).
 
