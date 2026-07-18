@@ -9,15 +9,31 @@ pub const DAY_MS: u64 = 24 * 60 * 60 * 1000;
 /// Trial length from first launch: 7 days.
 pub const TRIAL_MS: u64 = 7 * DAY_MS;
 
-/// The `license` settings block. Both fields default to empty; an empty
-/// `server_url` turns the whole licensing system off (the open-source
-/// default).
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+/// The license server URL baked in by the distributor of this build.
+pub const DEFAULT_LICENSE_SERVER_URL: &str = "https://license.kk-lab.net";
+
+/// The `license` settings block. `key` defaults to empty; `server_url`
+/// defaults to [`DEFAULT_LICENSE_SERVER_URL`]. Clearing `server_url` turns
+/// the whole licensing system off (the open-source escape hatch).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct LicenseSettings {
     #[serde(default)]
     pub key: String,
-    #[serde(default)]
+    #[serde(default = "default_server_url")]
     pub server_url: String,
+}
+
+fn default_server_url() -> String {
+    DEFAULT_LICENSE_SERVER_URL.to_string()
+}
+
+impl Default for LicenseSettings {
+    fn default() -> Self {
+        Self {
+            key: String::new(),
+            server_url: default_server_url(),
+        }
+    }
 }
 
 /// The cached last successful server response, persisted in
@@ -182,9 +198,13 @@ mod tests {
     fn license_settings_defaults_and_serde() {
         let l = LicenseSettings::default();
         assert_eq!(l.key, "");
-        assert_eq!(l.server_url, "");
+        assert_eq!(l.server_url, DEFAULT_LICENSE_SERVER_URL);
         let l: LicenseSettings = serde_json::from_str("{}").unwrap();
         assert_eq!(l, LicenseSettings::default());
+        // A saved empty server_url stays empty (licensing off) — only a
+        // MISSING field gets the default.
+        let l: LicenseSettings = serde_json::from_str(r#"{"server_url":""}"#).unwrap();
+        assert_eq!(l.server_url, "");
     }
 
     #[test]

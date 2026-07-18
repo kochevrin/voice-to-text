@@ -140,6 +140,8 @@ describe("Settings (mock mode)", () => {
 
     await user.click(screen.getByRole("tab", { name: "License" }));
     await user.type(screen.getByLabelText("License key"), "WHSPR-TEST-KEY");
+    // The server URL field is prefilled with the baked-in default; replace it.
+    await user.clear(screen.getByLabelText("License server URL"));
     await user.type(
       screen.getByLabelText("License server URL"),
       "https://license.example.com",

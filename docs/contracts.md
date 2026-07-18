@@ -33,7 +33,7 @@ TS mirror: `src/lib/types.ts` → `Settings`.
     "fallback_to_local": true
   },
   "history_enabled": true,
-  "license": { "key": "", "server_url": "" },
+  "license": { "key": "", "server_url": "https://license.kk-lab.net" },
   "onboarding_done": false,
   "paused": false
 }
@@ -42,10 +42,12 @@ TS mirror: `src/lib/types.ts` → `Settings`.
 ### Licensing (`license`)
 
 Honor-system subscription gate. Rust struct `whispr_core::LicenseSettings`
-(per-field serde defaults). **When `server_url` is empty the whole licensing
-system is OFF** (state `disabled`, app fully functional — the open-source
-default). Distributors deploy the bundled Cloudflare Worker
-(`licensing/worker/`) and prefill/enter its URL.
+(per-field serde defaults). `server_url` defaults to the author's server,
+`https://license.kk-lab.net` (`whispr_core::license::DEFAULT_LICENSE_SERVER_URL`).
+**When `server_url` is empty the whole licensing system is OFF** (state
+`disabled`, app fully functional) — clearing the field is the open-source
+escape hatch. Distributors deploy the bundled Cloudflare Worker
+(`licensing/worker/`) and bake in their own URL as the default.
 
 Server API: `GET {server_url}/check?key=<key>` →
 `{"active": bool, "expires": "YYYY-MM-DD" | null}` (HTTP 200 also for unknown

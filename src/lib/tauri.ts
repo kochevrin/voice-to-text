@@ -46,7 +46,7 @@ export const DEFAULT_SETTINGS: Settings = {
     fallback_to_local: true,
   },
   history_enabled: true,
-  license: { key: "", server_url: "" },
+  license: { key: "", server_url: "https://license.kk-lab.net" },
   onboarding_done: false,
   paused: false,
 };

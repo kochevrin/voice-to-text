@@ -206,6 +206,7 @@ pub fn model_size_bytes(id: &str) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::license::DEFAULT_LICENSE_SERVER_URL;
 
     #[test]
     fn defaults_match_schema() {
@@ -240,7 +241,7 @@ mod tests {
 
         let l = s.license;
         assert_eq!(l.key, "");
-        assert_eq!(l.server_url, "");
+        assert_eq!(l.server_url, DEFAULT_LICENSE_SERVER_URL);
     }
 
     #[test]
@@ -284,7 +285,7 @@ mod tests {
         assert_eq!(s.cloud, CloudSettings::default());
         // A pre-history_enabled settings.json keeps history on.
         assert!(s.history_enabled);
-        // A pre-license settings.json gets the license defaults (licensing off).
+        // A pre-license settings.json gets the license defaults (default server URL).
         assert_eq!(s.license, LicenseSettings::default());
     }
 
@@ -311,7 +312,7 @@ mod tests {
     fn partial_license_fills_missing_fields_with_defaults() {
         let s: Settings = serde_json::from_str(r#"{"license":{"key":"WSPR-1"}}"#).unwrap();
         assert_eq!(s.license.key, "WSPR-1");
-        assert_eq!(s.license.server_url, "");
+        assert_eq!(s.license.server_url, DEFAULT_LICENSE_SERVER_URL);
     }
 
     #[test]
