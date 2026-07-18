@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { Download, ExternalLink, Mic } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -74,6 +74,13 @@ export function Onboarding({ settings, onComplete }: OnboardingProps) {
 
   const canFinish = skipped || transcript.trim().length > 0;
 
+  // Persist the choice immediately so the backend's active model matches
+  // before the step-3 test runs (Finish still writes the final settings).
+  const handleModelChange = (id: string) => {
+    setModel(id);
+    void setSettings({ ...settings, model: id });
+  };
+
   const handleFinish = async () => {
     setFinishing(true);
     try {
@@ -134,7 +141,7 @@ export function Onboarding({ settings, onComplete }: OnboardingProps) {
         {step === 2 && (
           <ModelStep
             model={model}
-            onModelChange={setModel}
+            onModelChange={handleModelChange}
             onTranscript={setTranscript}
             skipped={skipped}
             onSkip={() => setSkipped(true)}
@@ -177,10 +184,12 @@ function PermissionsStep() {
           <li key={line}>{line}</li>
         ))}
       </ul>
-      <Button variant="outline" onClick={() => void openPermissionSettings()}>
-        <ExternalLink />
-        Open system settings
-      </Button>
+      {copy.name !== "Linux" && (
+        <Button variant="outline" onClick={() => void openPermissionSettings()}>
+          <ExternalLink />
+          Open system settings
+        </Button>
+      )}
       <p className="text-sm text-muted-foreground">
         The microphone is only used while your hotkey is held. Audio never leaves
         this device.
@@ -200,32 +209,39 @@ interface ModelStepProps {
 function ModelStep({ model, onModelChange, onTranscript, skipped, onSkip }: ModelStepProps) {
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [progress, setProgress] = useState<ModelDownloadProgress | null>(null);
-  const [downloading, setDownloading] = useState(false);
+  const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [downloadError, setDownloadError] = useState<string | null>(null);
-  const modelRef = useRef(model);
-  modelRef.current = model;
 
   const refresh = () => void listModels().then(setModels);
 
   useEffect(() => {
     refresh();
-    return onModelDownloadProgress((p) => {
-      if (p.id === modelRef.current) setProgress(p);
-    });
   }, []);
+
+  useEffect(() => {
+    if (downloadingId === null) return;
+    return onModelDownloadProgress((p) => {
+      if (p.id === downloadingId) setProgress(p);
+    });
+  }, [downloadingId]);
 
   const selected = models.find((m) => m.id === model);
   const downloaded = selected?.downloaded ?? false;
+  const percent =
+    progress === null || progress.total === 0
+      ? 0
+      : Math.round((progress.downloaded / progress.total) * 100);
 
   const handleDownload = async () => {
-    setDownloading(true);
+    const id = model;
+    setDownloadingId(id);
     setDownloadError(null);
     try {
-      await downloadModel(model);
+      await downloadModel(id);
     } catch (err) {
       setDownloadError(String(err));
     } finally {
-      setDownloading(false);
+      setDownloadingId(null);
       setProgress(null);
       refresh();
     }
@@ -251,24 +267,29 @@ function ModelStep({ model, onModelChange, onTranscript, skipped, onSkip }: Mode
       </div>
 
       {!downloaded && (
-        <div className="space-y-2">
-          <Button
-            variant="outline"
-            onClick={() => void handleDownload()}
-            disabled={downloading}
-          >
-            <Download />
-            {downloading ? "Downloading…" : `Download ${model}`}
-          </Button>
-          {downloading && progress && (
-            <Progress value={(progress.downloaded / progress.total) * 100} />
-          )}
-          {downloadError && (
-            <p role="alert" className="text-xs text-destructive">
-              {downloadError}
-            </p>
-          )}
+        <Button
+          variant="outline"
+          onClick={() => void handleDownload()}
+          disabled={downloadingId !== null}
+        >
+          <Download />
+          {downloadingId !== null ? "Downloading…" : `Download ${model}`}
+        </Button>
+      )}
+
+      {downloadingId !== null && progress && (
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">
+            {downloadingId} — {percent}%
+          </p>
+          <Progress value={percent} />
         </div>
+      )}
+
+      {downloadError && (
+        <p role="alert" className="text-xs text-destructive">
+          {downloadError}
+        </p>
       )}
 
       <div className="space-y-2">
