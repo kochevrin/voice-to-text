@@ -33,3 +33,6 @@ Thumbs.db
 
 # Playwright MCP scratch output
 .playwright-mcp/
+
+# Landing site (kept out of the public repo until it moves to the private one)
+/landing/
