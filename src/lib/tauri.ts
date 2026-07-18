@@ -280,6 +280,12 @@ export function openPermissionSettings(): Promise<null> {
   return Promise.resolve(null);
 }
 
+export function openRepo(): Promise<null> {
+  if (!isMock) return invoke<null>("open_repo");
+  window.open("https://github.com/kochevrin/voice-to-text", "_blank");
+  return Promise.resolve(null);
+}
+
 // ---------------------------------------------------------------------------
 // Public API — events
 // ---------------------------------------------------------------------------

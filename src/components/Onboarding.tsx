@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Download, ExternalLink, Mic } from "lucide-react";
+import { Download, ExternalLink } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
@@ -94,7 +95,7 @@ export function Onboarding({ settings, onComplete }: OnboardingProps) {
   return (
     <div className="mx-auto flex h-full w-full max-w-md flex-col p-6">
       <div className="mb-6 flex items-center gap-3">
-        <Mic className="h-5 w-5 text-primary" />
+        <img src={logo} alt="" className="h-5 w-5 rounded" />
         <h1 className="text-lg font-semibold">Welcome to whispr-open</h1>
       </div>
 

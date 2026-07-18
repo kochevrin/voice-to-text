@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Mic, Settings as SettingsIcon } from "lucide-react";
+import { Settings as SettingsIcon } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
@@ -11,7 +12,7 @@ import { useHistory } from "@/hooks/useHistory";
 import { useSettings } from "@/hooks/useSettings";
 import { displayHotkey, isMacPlatform } from "@/lib/hotkey";
 import type { HistoryEntry } from "@/lib/types";
-import { copyText, setPaused } from "@/lib/tauri";
+import { copyText, openRepo, setPaused } from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 interface HomeProps {
@@ -36,7 +37,7 @@ export function Home({ onOpenSettings }: HomeProps) {
   return (
     <div className="flex h-full flex-col">
       <header className="flex items-center gap-3 border-b px-4 py-3">
-        <Mic className="h-4 w-4 text-primary" />
+        <img src={logo} alt="" className="h-5 w-5 rounded" />
         <h1 className="text-base font-semibold">whispr-open</h1>
         <StateChip state={app} />
         {settings?.paused && (
@@ -142,6 +143,17 @@ export function Home({ onOpenSettings }: HomeProps) {
           </CardContent>
         </Card>
       </main>
+
+      <footer className="px-4 pb-3 text-center text-xs text-muted-foreground">
+        whispr-open · by Konstantin Kochevrin ·{" "}
+        <button
+          type="button"
+          onClick={() => void openRepo()}
+          className="underline underline-offset-2 transition-colors hover:text-foreground"
+        >
+          GitHub
+        </button>
+      </footer>
     </div>
   );
 }

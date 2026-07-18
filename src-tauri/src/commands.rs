@@ -167,3 +167,9 @@ pub async fn open_permission_settings() -> Result<(), String> {
     }
     Ok(())
 }
+
+#[tauri::command]
+pub async fn open_repo() -> Result<(), String> {
+    tauri_plugin_opener::open_url("https://github.com/kochevrin/voice-to-text", None::<&str>)
+        .map_err(|e| e.to_string())
+}

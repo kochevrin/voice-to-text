@@ -26,6 +26,7 @@ describe("App (mock mode)", () => {
 
     expect(await screen.findByText("whispr-open")).toBeInTheDocument();
     expect(screen.getByText("No transcriptions yet.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "GitHub" })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Settings" }));
     expect(await screen.findByLabelText("Hotkey")).toBeInTheDocument();

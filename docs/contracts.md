@@ -86,7 +86,8 @@ Rules:
 | `copy_text` | `{ text: string }` | `null` | Puts text on the system clipboard. |
 | `get_disk_usage` | – | `{ models_bytes: number }` | |
 | `set_paused` | `{ paused: boolean }` | `null` | Pause/resume global hotkey. |
-| `open_permission_settings` | – | `null` | macOS: deep-link to Accessibility pane; other OS: no-op. |
+| `open_permission_settings` | – | `null` | macOS: deep-link to Accessibility pane; Windows: microphone privacy settings; Linux: no-op. |
+| `open_repo` | – | `null` | Opens the project GitHub page (https://github.com/kochevrin/voice-to-text) in the default browser. Mock: `window.open`. |
 
 Command errors are strings (Tauri default `Result<T, String>`).
 

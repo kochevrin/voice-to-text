@@ -77,6 +77,7 @@ pub fn run() {
             commands::get_disk_usage,
             commands::set_paused,
             commands::open_permission_settings,
+            commands::open_repo,
         ])
         .run(tauri::generate_context!())
         .expect("error while running whispr-open");
