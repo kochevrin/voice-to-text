@@ -23,16 +23,16 @@ for (let y = 0; y < H; y++) {
   for (let x = 0; x < W; x++) {
     const i = (y * W + x) * 4;
     if (!inRoundedRect(x, y, 64, 64, 896, 896, 200)) continue; // transparent corners
-    // background: deep indigo gradient
+    // background: brand navy gradient (#1E3A5F -> #12243E, sampled from the mark)
     const t = y / H;
-    let [r, g, b] = [30 + 20 * t, 27 + 14 * t, 75 + 60 * t];
-    // waveform bars (soft mint)
+    let [r, g, b] = [30 - 12 * t, 58 - 22 * t, 95 - 33 * t];
+    // waveform bars (brand orange #F57C00)
     for (let bi = 0; bi < bars.length; bi++) {
       const bx = x0 + bi * (barW + gap);
       const bh = bars[bi] * 560;
       const by = (H - bh) / 2;
       if (inRoundedRect(x, y, bx, by, barW, bh, barW / 2)) {
-        [r, g, b] = [167, 243, 208];
+        [r, g, b] = [245, 124, 0];
       }
     }
     px[i] = r; px[i + 1] = g; px[i + 2] = b; px[i + 3] = 255;
