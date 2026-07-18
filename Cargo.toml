@@ -3,9 +3,11 @@ resolver = "2"
 members = ["crates/whispr-core", "src-tauri"]
 
 [workspace.package]
-version = "0.1.2"
+version = "0.1.3"
 edition = "2021"
 license = "MIT"
+authors = ["Konstantin Kochevrin"]
+repository = "https://github.com/kochevrin/voice-to-text"
 
 [workspace.dependencies]
 serde = { version = "1", features = ["derive"] }

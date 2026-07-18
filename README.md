@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/logo.png" alt="whispr-open logo" width="112">
+</p>
+
 # whispr-open
 
 [![Release](https://github.com/kochevrin/voice-to-text/actions/workflows/release.yml/badge.svg)](https://github.com/kochevrin/voice-to-text/actions/workflows/release.yml)
@@ -184,6 +188,11 @@ docker run --rm -v "$PWD":/app -w /app whispr-dev cargo test --workspace
 
 Manual per-OS injection checklists: [`docs/testing.md`](docs/testing.md).
 Known deviations from the original spec: [`docs/deviations.md`](docs/deviations.md).
+
+## Author
+
+**Konstantin Kochevrin** — [github.com/kochevrin](https://github.com/kochevrin) ·
+project home: [github.com/kochevrin/voice-to-text](https://github.com/kochevrin/voice-to-text)
 
 ## License
 
