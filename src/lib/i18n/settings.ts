@@ -100,6 +100,9 @@ export const settings = {
     "settings.license.checkError": "Could not check the license: {error}",
     "settings.license.checking": "Checking…",
     "settings.license.check": "Check now",
+    "settings.license.subscribe": "Order a subscription",
+    "settings.license.subscribeHint":
+      "Payment and key delivery happen in our Telegram bot.",
     "settings.license.credentials": "Credentials",
     "settings.license.key": "License key",
     "settings.license.showKey": "Show license key",
@@ -208,6 +211,9 @@ export const settings = {
     "settings.license.checkError": "Не вдалося перевірити ліцензію: {error}",
     "settings.license.checking": "Перевірка…",
     "settings.license.check": "Перевірити зараз",
+    "settings.license.subscribe": "Оформити підписку",
+    "settings.license.subscribeHint":
+      "Оплата та видача ключа — у нашому Telegram-боті.",
     "settings.license.credentials": "Облікові дані",
     "settings.license.key": "Ліцензійний ключ",
     "settings.license.showKey": "Показати ліцензійний ключ",

@@ -199,6 +199,31 @@ describe("Settings (mock mode)", () => {
     expect(
       await screen.findByText("Active until 2027-01-01"),
     ).toBeInTheDocument();
+    // Active with 365 days left: the subscribe CTA is gone.
+    expect(
+      screen.queryByRole("button", { name: "Order a subscription" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("shows the subscribe button in trial mode and opens the Telegram bot", async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByRole("tab", { name: "License" }));
+    const subscribe = await screen.findByRole("button", {
+      name: "Order a subscription",
+    });
+    expect(
+      screen.getByText("Payment and key delivery happen in our Telegram bot."),
+    ).toBeInTheDocument();
+
+    await user.click(subscribe);
+    expect(open).toHaveBeenCalledWith(
+      "https://t.me/whispr_license_bot?start=subscribe",
+      "_blank",
+    );
   });
 
   it("shows the server verdict line after Check now, saving the typed key first", async () => {

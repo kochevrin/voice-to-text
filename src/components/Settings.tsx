@@ -52,6 +52,8 @@ const DEFAULT_DEVICE = "__default__";
 
 const GROQ_CONSOLE_URL = "https://console.groq.com/keys";
 
+const TELEGRAM_BOT_URL = "https://t.me/whispr_license_bot?start=subscribe";
+
 const CLOUD_PRESETS = [
   {
     value: "groq",
@@ -935,6 +937,13 @@ function LicenseTab({ draft, update, persist }: LicenseTabProps) {
   const checkedAt =
     status === null ? null : formatCheckedAt(t, status.last_checked_ms);
 
+  // The CTA targets everyone who may need to pay: trials, rejected keys, and
+  // soon-to-expire subscriptions. A comfortably active user doesn't need it.
+  const showSubscribe =
+    status !== null &&
+    status.state !== "disabled" &&
+    !(status.state === "active" && (status.days_left ?? 0) > 30);
+
   return (
     <>
       <section className="space-y-3">
@@ -973,6 +982,16 @@ function LicenseTab({ draft, update, persist }: LicenseTabProps) {
         >
           {checking ? t("settings.license.checking") : t("settings.license.check")}
         </Button>
+        {showSubscribe && (
+          <div className="space-y-1.5">
+            <Button size="sm" onClick={() => void openUrl(TELEGRAM_BOT_URL)}>
+              {t("settings.license.subscribe")}
+            </Button>
+            <p className="text-xs text-muted-foreground">
+              {t("settings.license.subscribeHint")}
+            </p>
+          </div>
+        )}
       </section>
 
       <section className="space-y-5 border-t pt-5">
