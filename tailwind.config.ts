@@ -36,6 +36,11 @@ export default {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
+        // App states, kept distinct from the brand accent.
+        rec: "hsl(2 84% 60%)",
+        work: "hsl(212 90% 66%)",
+        ok: "hsl(152 60% 48%)",
+        warn: "hsl(38 92% 58%)",
       },
       borderRadius: {
         lg: "var(--radius)",
