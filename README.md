@@ -1,9 +1,16 @@
 # whispr-open
 
+[![Release](https://github.com/kochevrin/voice-to-text/actions/workflows/release.yml/badge.svg)](https://github.com/kochevrin/voice-to-text/actions/workflows/release.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+
 Open-source, cross-platform push-to-talk dictation. Hold a hotkey, speak,
 release — your words are transcribed locally by [whisper.cpp](https://github.com/ggerganov/whisper.cpp)
 and typed into whatever app has focus. A self-hostable replacement for Wispr
 Flow: no cloud, no subscription, your audio never leaves the machine.
+
+<p align="center">
+  <img src="docs/screenshots/onboarding-linux.png" alt="whispr-open onboarding (Linux)" width="600">
+</p>
 
 ## Features
 
@@ -67,6 +74,8 @@ Plus Rust (stable), Node 22+, pnpm 11.
 ### Run it
 
 ```sh
+git clone https://github.com/kochevrin/voice-to-text.git
+cd voice-to-text
 pnpm install
 
 # Build the whisper.cpp sidecar binary for your OS (one-time; see sidecar/whisper/README.md)
@@ -162,4 +171,10 @@ Known deviations from the original spec: [`docs/deviations.md`](docs/deviations.
 
 ## License
 
-[MIT](LICENSE)
+whispr-open is [MIT](LICENSE)-licensed.
+
+It stands on open-source components with their own licenses — most notably
+[whisper.cpp](https://github.com/ggerganov/whisper.cpp) (MIT), OpenAI's Whisper
+model weights (MIT) and [Tauri](https://tauri.app) (Apache-2.0/MIT). The full
+rundown of bundled third-party components is in
+[`THIRD-PARTY.md`](THIRD-PARTY.md).
