@@ -34,6 +34,8 @@ export interface Settings {
   silence_timeout_ms: number;
   vad_enabled: boolean;
   pill_enabled: boolean;
+  /** Launch the app at login. */
+  autostart: boolean;
   postproc: PostprocSettings;
   cloud: CloudSettings;
   history_enabled: boolean;
@@ -62,6 +64,23 @@ export interface LicenseStatus {
   server_active: boolean | null;
   /** Subscription days remaining, independent of trial_days_left. */
   days_left: number | null;
+  /** Why the server rejected the key ("device_limit"); null otherwise. */
+  reason: string | null;
+}
+
+export interface UpdateStatus {
+  current: string;
+  /** Latest published version ("0.4.0"); null when the tag doesn't parse. */
+  latest: string | null;
+  update_available: boolean;
+  /** Where the Download button should send the user. */
+  url: string;
+}
+
+export interface UpdateAvailableEvent {
+  current: string;
+  latest: string;
+  url: string;
 }
 
 export interface ModelInfo {

@@ -8,7 +8,14 @@ use whispr_core::{normalize_hotkey, HotkeyError, Settings, MODEL_IDS};
 use crate::i18n::{self, Msg};
 use crate::models::{self, DiskUsage, ModelInfo};
 use crate::state::{self, AppState, HistoryEntry};
-use crate::{audio, hotkeys, license, postproc, session, tray};
+use crate::{audio, hotkeys, license, postproc, session, tray, updates};
+
+/// Enables or disables the OS launch-at-login entry via tauri-plugin-autostart.
+fn apply_autostart(app: &AppHandle, enabled: bool) -> Result<(), String> {
+    use tauri_plugin_autostart::ManagerExt;
+    let manager = app.autolaunch();
+    if enabled { manager.enable() } else { manager.disable() }.map_err(|e| e.to_string())
+}
 
 fn hotkey_error_message(lang: &str, err: HotkeyError) -> String {
     match err {
@@ -46,6 +53,17 @@ pub async fn set_settings(
         return Err(i18n::t(&lang, Msg::UnknownModel).replace("{model}", &settings.model));
     }
 
+    // Apply the login entry first: unlike the hotkey it has no rollback
+    // dependency, so a failure here rejects the save cleanly before any other
+    // OS state is touched. Persisting happens later, so the stored flag never
+    // says one thing while the OS does another.
+    let autostart_changed = settings.autostart != previous.autostart;
+    if autostart_changed {
+        if let Err(e) = apply_autostart(&app, settings.autostart) {
+            return Err(i18n::t(&lang, Msg::AutostartFailed).replace("{detail}", &e));
+        }
+    }
+
     // Try the new hotkey state before persisting anything, so a combo the OS
     // rejects doesn't clobber a working one. Skipped when hotkey and paused
     // are unchanged: there is nothing to re-register, and on Windows tearing
@@ -57,6 +75,13 @@ pub async fn set_settings(
                 hotkeys::apply_registration(&app, &previous.hotkey, previous.paused)
             {
                 tracing::warn!("failed to restore previous hotkey: {restore}");
+            }
+            // Roll back the autostart change too, so a rejected save leaves no
+            // applied OS state behind.
+            if autostart_changed {
+                if let Err(revert) = apply_autostart(&app, previous.autostart) {
+                    tracing::warn!("failed to restore previous autostart: {revert}");
+                }
             }
             return Err(i18n::t(&lang, Msg::KeepingPreviousSettings).replace("{detail}", &e));
         }
@@ -219,4 +244,9 @@ pub async fn get_license_status(app: AppHandle) -> Result<license::LicenseStatus
 #[tauri::command]
 pub async fn check_license_now(app: AppHandle) -> Result<license::LicenseStatus, String> {
     Ok(license::check_now(&app).await)
+}
+
+#[tauri::command]
+pub async fn check_updates(app: AppHandle) -> Result<updates::UpdateStatus, String> {
+    updates::check_now(&app).await
 }

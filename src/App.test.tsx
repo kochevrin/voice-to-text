@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import App from "./App";
@@ -7,6 +7,10 @@ import { DEFAULT_SETTINGS, setSettings } from "@/lib/tauri";
 describe("App (mock mode)", () => {
   beforeEach(() => {
     localStorage.clear();
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   it("shows Onboarding until onboarding_done", async () => {
@@ -75,6 +79,36 @@ describe("App (mock mode)", () => {
 
     expect(await screen.findByText("Історія")).toBeInTheDocument();
     expect(screen.queryByText("History")).not.toBeInTheDocument();
+  });
+
+  it("shows the update banner on Home when a newer version is available", async () => {
+    localStorage.setItem(
+      "whispr-mock-settings",
+      JSON.stringify({ ...DEFAULT_SETTINGS, onboarding_done: true }),
+    );
+    // The mock reports an update while this flag holds a version.
+    localStorage.setItem("whispr-mock-update", "0.9.9");
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    const user = userEvent.setup();
+    render(<App />);
+
+    // The banner appears from Home's on-mount check, not a background emit.
+    expect(
+      await screen.findByText("Update 0.9.9 is available"),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Download" }));
+    expect(open).toHaveBeenCalledWith(
+      "https://github.com/kochevrin/voice-to-text/releases/latest",
+      "_blank",
+    );
+
+    // Dismissing clears the banner.
+    await user.click(screen.getByRole("button", { name: "Close" }));
+    expect(
+      screen.queryByText("Update 0.9.9 is available"),
+    ).not.toBeInTheDocument();
+    open.mockRestore();
   });
 
   it("makes the paused state unmistakable on Home", async () => {

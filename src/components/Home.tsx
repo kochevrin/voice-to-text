@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Settings as SettingsIcon } from "lucide-react";
+import { Settings as SettingsIcon, X } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -12,8 +12,19 @@ import { useSettings } from "@/hooks/useSettings";
 import { displayHotkey, isMacPlatform } from "@/lib/hotkey";
 import { useT } from "@/lib/i18n";
 import type { TFunction } from "@/lib/i18n";
-import type { HistoryEntry, LicenseStatus } from "@/lib/types";
-import { copyText, getLicenseStatus, openUrl, setPaused } from "@/lib/tauri";
+import type {
+  HistoryEntry,
+  LicenseStatus,
+  UpdateAvailableEvent,
+} from "@/lib/types";
+import {
+  checkUpdates,
+  copyText,
+  getLicenseStatus,
+  onUpdateAvailable,
+  openUrl,
+  setPaused,
+} from "@/lib/tauri";
 import { cn } from "@/lib/utils";
 
 /** The author's profile rather than the repository — the repo may go private. */
@@ -44,11 +55,24 @@ export function Home({ onOpenSettings }: HomeProps) {
   const { history } = useHistory();
   const [copiedTs, setCopiedTs] = useState<number | null>(null);
   const [license, setLicense] = useState<LicenseStatus | null>(null);
+  const [update, setUpdate] = useState<UpdateAvailableEvent | null>(null);
 
   useEffect(() => {
     void getLicenseStatus()
       .then(setLicense)
       .catch(() => setLicense(null));
+    // Check on mount rather than trust the startup emit: the daily background
+    // check's first tick fires while the webview is still loading, and Tauri
+    // drops events with no listener, so the passive path alone misses updates.
+    // Errors are swallowed — the banner is best-effort, the Settings button is
+    // the explicit path.
+    void checkUpdates()
+      .then((u) => {
+        if (u.update_available && u.latest !== null)
+          setUpdate({ current: u.current, latest: u.latest, url: u.url });
+      })
+      .catch(() => undefined);
+    return onUpdateAvailable(setUpdate);
   }, []);
 
   const countdown = licenseCountdown(license, t);
@@ -91,6 +115,25 @@ export function Home({ onOpenSettings }: HomeProps) {
         </Button>
       </header>
       <div className="transmission" data-state={app.state} />
+
+      {update && (
+        <div className="flex items-center gap-3 border-b px-4 py-2">
+          <p className="flex-1 text-sm text-foreground">
+            {t("home.update.available", { version: update.latest })}
+          </p>
+          <Button size="sm" onClick={() => void openUrl(update.url)}>
+            {t("home.update.download")}
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t("common.close")}
+            onClick={() => setUpdate(null)}
+          >
+            <X />
+          </Button>
+        </div>
+      )}
 
       <main className="flex-1 space-y-6 overflow-y-auto p-4">
         {settings && (

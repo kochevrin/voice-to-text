@@ -33,9 +33,11 @@ import type {
   ModelDownloadProgress,
   ModelInfo,
   Settings as SettingsType,
+  UpdateStatus,
 } from "@/lib/types";
 import {
   checkLicenseNow,
+  checkUpdates,
   clearHistory,
   deleteModel,
   downloadModel,
@@ -398,6 +400,15 @@ function GeneralTab({ draft, update }: TabProps) {
         />
       </div>
 
+      <div className="flex items-center justify-between">
+        <Label htmlFor="autostart">{t("settings.general.autostart")}</Label>
+        <Switch
+          id="autostart"
+          checked={draft.autostart}
+          onCheckedChange={(autostart) => update({ autostart })}
+        />
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="silence-timeout">{t("settings.general.silence")}</Label>
         <Input
@@ -431,7 +442,69 @@ function GeneralTab({ draft, update }: TabProps) {
           onCheckedChange={(vad_enabled) => update({ vad_enabled })}
         />
       </div>
+
+      <UpdatesSection />
     </>
+  );
+}
+
+/** Manual update check — level 1: compare against the latest GitHub release
+ * and hand off to the browser for the actual download. */
+function UpdatesSection() {
+  const t = useT();
+  const [result, setResult] = useState<UpdateStatus | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const handleCheck = async () => {
+    setChecking(true);
+    setError(null);
+    try {
+      setResult(await checkUpdates());
+    } catch (err) {
+      setResult(null);
+      setError(String(err));
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <section className="space-y-3 border-t pt-5">
+      <h2 className="eyebrow">{t("settings.updates.title")}</h2>
+      <div className="flex items-center gap-3">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={checking}
+          onClick={() => void handleCheck()}
+        >
+          {checking ? t("settings.updates.checking") : t("settings.updates.check")}
+        </Button>
+        {result?.update_available && (
+          <Button size="sm" onClick={() => void openUrl(result.url)}>
+            {t("settings.updates.download")}
+          </Button>
+        )}
+      </div>
+      {result && (
+        <p
+          className={cn(
+            "readout text-xs",
+            result.update_available ? "text-warn" : "text-ok",
+          )}
+        >
+          {result.update_available
+            ? t("settings.updates.available", { version: result.latest ?? "" })
+            : t("settings.updates.upToDate", { version: result.current })}
+        </p>
+      )}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {t("settings.updates.error", { error })}
+        </p>
+      )}
+    </section>
   );
 }
 
@@ -874,7 +947,9 @@ function formatLicenseStatus(t: TFunction, status: LicenseStatus): string {
  * the old single-word status hid. */
 function formatServerVerdict(t: TFunction, status: LicenseStatus): string {
   if (status.server_active === false)
-    return t("settings.license.verdict.rejected");
+    return status.reason === "device_limit"
+      ? t("settings.license.verdict.deviceLimit")
+      : t("settings.license.verdict.rejected");
   if (status.server_active !== true)
     return t("settings.license.verdict.pending");
   const parts = [t("settings.license.verdict.active")];

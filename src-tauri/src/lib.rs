@@ -14,6 +14,7 @@ mod recorder;
 mod session;
 mod state;
 mod tray;
+mod updates;
 pub mod whisper;
 
 use tauri::Manager;
@@ -47,6 +48,10 @@ pub fn run() {
         )
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ))
         .manage(AppState::default())
         .on_window_event(|window, event| {
             // Closing the main window hides it; the app lives in the tray.
@@ -70,7 +75,22 @@ pub fn run() {
                 tracing::warn!("{e}");
                 state::notify(&handle, "whispr-open", &e);
             }
+            // Sync the OS login entry to the stored flag on every launch, both
+            // ways: enabling heals a moved binary path (AppImage renamed, app
+            // dragged elsewhere), and disabling heals a divergence where the OS
+            // entry was left on while a later save recorded the flag as off.
+            // The stored flag is the single source of truth.
+            {
+                use tauri_plugin_autostart::ManagerExt;
+                let manager = handle.autolaunch();
+                let want = state::current_settings(&handle).autostart;
+                let applied = if want { manager.enable() } else { manager.disable() };
+                if let Err(e) = applied {
+                    tracing::warn!("failed to sync the autostart entry: {e}");
+                }
+            }
             license::spawn_periodic_check(&handle);
+            updates::spawn_periodic_check(&handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -92,6 +112,7 @@ pub fn run() {
             commands::open_url,
             commands::get_license_status,
             commands::check_license_now,
+            commands::check_updates,
         ])
         .run(tauri::generate_context!())
         .expect("error while running whispr-open");

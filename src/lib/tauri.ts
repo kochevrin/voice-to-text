@@ -14,6 +14,8 @@ import type {
   ModelInfo,
   Settings,
   TranscriptionEvent,
+  UpdateAvailableEvent,
+  UpdateStatus,
 } from "./types";
 import { MODEL_IDS } from "./types";
 
@@ -31,6 +33,7 @@ export const DEFAULT_SETTINGS: Settings = {
   silence_timeout_ms: 800,
   vad_enabled: true,
   pill_enabled: true,
+  autostart: false,
   postproc: {
     enabled: false,
     ollama_url: "http://localhost:11434",
@@ -317,12 +320,29 @@ export function getLicenseStatus(): Promise<LicenseStatus> {
     last_checked_ms: null,
     server_active: null,
     days_left: null,
+    reason: null,
   });
 }
 
+// A sentinel key that makes the mock backend report the device-limit
+// rejection, so dev/tests can exercise that verdict branch.
+const MOCK_DEVICE_LIMIT_KEY = "DEVICELIMIT";
+
 export function checkLicenseNow(): Promise<LicenseStatus> {
   if (!isMock) return invoke<LicenseStatus>("check_license_now");
-  const active = mockReadSettings().license.key !== "";
+  const key = mockReadSettings().license.key;
+  if (key === MOCK_DEVICE_LIMIT_KEY) {
+    return Promise.resolve({
+      state: "inactive",
+      trial_days_left: null,
+      expires: "2027-01-01",
+      last_checked_ms: Date.now(),
+      server_active: false,
+      days_left: 365,
+      reason: "device_limit",
+    });
+  }
+  const active = key !== "";
   return Promise.resolve({
     state: active ? "active" : "inactive",
     trial_days_left: null,
@@ -330,7 +350,25 @@ export function checkLicenseNow(): Promise<LicenseStatus> {
     last_checked_ms: Date.now(),
     server_active: active,
     days_left: active ? 365 : null,
+    reason: null,
   });
+}
+
+const RELEASES_PAGE_URL =
+  "https://github.com/kochevrin/voice-to-text/releases/latest";
+
+// When this localStorage key holds a version, the mock reports it as an
+// available update — the switch dev/tests flip to see the update UI.
+const MOCK_UPDATE_KEY = "whispr-mock-update";
+
+export function checkUpdates(): Promise<UpdateStatus> {
+  if (!isMock) return invoke<UpdateStatus>("check_updates");
+  const latest = localStorage.getItem(MOCK_UPDATE_KEY);
+  return Promise.resolve(
+    latest
+      ? { current: "dev", latest, update_available: true, url: RELEASES_PAGE_URL }
+      : { current: "dev", latest: null, update_available: false, url: RELEASES_PAGE_URL },
+  );
 }
 
 export function openUrl(url: string): Promise<null> {
@@ -363,4 +401,10 @@ export function onModelDownloadProgress(
   cb: (e: ModelDownloadProgress) => void,
 ): Unsubscribe {
   return subscribe("model-download-progress", cb);
+}
+
+export function onUpdateAvailable(
+  cb: (e: UpdateAvailableEvent) => void,
+): Unsubscribe {
+  return subscribe("update-available", cb);
 }

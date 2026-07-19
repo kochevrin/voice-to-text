@@ -2,7 +2,7 @@
 
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::sync::{Mutex, RwLock};
+use std::sync::{Mutex, OnceLock, RwLock};
 
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter, Manager};
@@ -60,6 +60,9 @@ pub struct AppState {
     /// Last effective license state seen by a check, for once-per-transition
     /// notifications.
     pub license_state: Mutex<Option<LicenseState>>,
+    /// Anonymous install id sent with license checks, resolved once per run so
+    /// a persistence failure can register at most one phantom device.
+    pub device_id: OnceLock<String>,
     /// Kept alive for the whole app lifetime: on X11 the clipboard contents
     /// are only served while the owning `Clipboard` instance exists.
     pub clipboard: Mutex<Option<arboard::Clipboard>>,
@@ -74,6 +77,7 @@ impl Default for AppState {
             phase: Mutex::new(Phase::Idle),
             downloads: Mutex::new(HashSet::new()),
             license_state: Mutex::new(None),
+            device_id: OnceLock::new(),
             clipboard: Mutex::new(None),
         }
     }

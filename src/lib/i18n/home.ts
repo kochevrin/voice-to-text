@@ -16,6 +16,8 @@ export const home = {
     "home.history.empty": "No transcriptions yet.",
     "home.history.emptyHint":
       "Hold your hotkey and speak — transcripts land here.",
+    "home.update.available": "Update {version} is available",
+    "home.update.download": "Download",
     "home.footer.by": "by",
   },
   uk: {
@@ -32,6 +34,8 @@ export const home = {
     "home.history.empty": "Розшифровок ще немає.",
     "home.history.emptyHint":
       "Утримуйте гарячу клавішу й говоріть — розшифровки з’являться тут.",
+    "home.update.available": "Доступне оновлення {version}",
+    "home.update.download": "Завантажити",
     "home.footer.by": "автор —",
   },
 };

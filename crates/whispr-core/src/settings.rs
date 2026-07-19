@@ -88,6 +88,9 @@ pub struct Settings {
     pub vad_enabled: bool,
     #[serde(default = "default_true")]
     pub pill_enabled: bool,
+    /// Launch the app at login (applied via tauri-plugin-autostart).
+    #[serde(default)]
+    pub autostart: bool,
     #[serde(default)]
     pub postproc: PostprocSettings,
     #[serde(default)]
@@ -118,6 +121,7 @@ impl Default for Settings {
             silence_timeout_ms: default_silence_timeout_ms(),
             vad_enabled: true,
             pill_enabled: true,
+            autostart: false,
             postproc: PostprocSettings::default(),
             cloud: CloudSettings::default(),
             history_enabled: true,
@@ -228,6 +232,7 @@ mod tests {
         assert_eq!(s.silence_timeout_ms, 800);
         assert!(s.vad_enabled);
         assert!(s.pill_enabled);
+        assert!(!s.autostart);
         assert!(s.history_enabled);
         assert_eq!(s.ui_language, "en");
         assert!(!s.onboarding_done);
@@ -259,6 +264,7 @@ mod tests {
         let mut s = Settings::default();
         s.hotkey = "Ctrl+Shift+D".to_string();
         s.input_device = Some("USB Mic".to_string());
+        s.autostart = true;
         s.postproc.enabled = true;
         s.cloud.enabled = true;
         s.cloud.api_key = "gsk_test".to_string();
@@ -291,6 +297,8 @@ mod tests {
         assert_eq!(s.silence_timeout_ms, 800);
         assert!(s.vad_enabled);
         assert!(s.pill_enabled);
+        // A pre-autostart settings.json keeps autostart off.
+        assert!(!s.autostart);
         assert_eq!(s.postproc, PostprocSettings::default());
         // A pre-cloud settings.json (no "cloud" key) gets the cloud defaults.
         assert_eq!(s.cloud, CloudSettings::default());
@@ -363,6 +371,7 @@ mod tests {
             "silence_timeout_ms",
             "vad_enabled",
             "pill_enabled",
+            "autostart",
             "postproc",
             "cloud",
             "history_enabled",

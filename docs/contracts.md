@@ -34,11 +34,22 @@ TS mirror: `src/lib/types.ts` → `Settings`.
   },
   "history_enabled": true,
   "ui_language": "en",              // "en" | "uk" — interface language
+  "autostart": false,               // launch the app at login
   "license": { "key": "", "server_url": "https://license.kk-lab.net" },
   "onboarding_done": false,
   "paused": false
 }
 ```
+
+### Autostart (`autostart`)
+
+Launch-at-login, via `tauri-plugin-autostart` (Windows registry `Run` key,
+macOS LaunchAgent, Linux `~/.config/autostart`). Applied Rust-side only:
+`set_settings` enables/disables the OS entry when the flag changes BEFORE
+persisting, and rejects the whole save (string error, localized) if the OS
+call fails. On startup, when `autostart` is true the entry is re-enabled
+best-effort so a moved binary path heals itself. The General tab exposes the
+switch.
 
 ### Licensing (`license`)
 
@@ -50,9 +61,14 @@ Honor-system subscription gate. Rust struct `whispr_core::LicenseSettings`
 escape hatch. Distributors deploy the bundled Cloudflare Worker
 (`licensing/worker/`) and bake in their own URL as the default.
 
-Server API: `GET {server_url}/check?key=<key>` →
-`{"active": bool, "expires": "YYYY-MM-DD" | null}` (HTTP 200 also for unknown
-keys, with `active: false`).
+Server API: `GET {server_url}/check?key=<key>&device=<device_id>` →
+`{"active": bool, "expires": "YYYY-MM-DD" | null, "reason"?: "device_limit"}`
+(HTTP 200 also for unknown keys, with `active: false`). `device_id` is a
+random per-install token (32 hex chars) persisted at `<app_data>/device_id` —
+NOT a hardware fingerprint. The server allows at most 3 devices per key; a
+device unseen for 30 days frees its slot. A 4th device gets `active: false`
+with `reason: "device_limit"`, which the app caches like any other negative
+verdict (`CachedCheck.reason`, surfaced as `LicenseStatus.reason`).
 
 Verdict logic (pure, `whispr_core::license::evaluate`):
 - `server_url` empty → `disabled`.
@@ -66,10 +82,11 @@ Verdict logic (pure, `whispr_core::license::evaluate`):
   system).
 Checks run at startup and hourly (tokio interval), plus on license settings
 change; cache persisted in `license.json` `{installed_at_ms, last: {active,
-expires, checked_at_ms}}`.
+expires, reason, checked_at_ms}}` (`reason` is `null`/absent except on a
+`device_limit` rejection).
 
 Commands:
-| `get_license_status` | – | `LicenseStatus` | `{ state: "disabled"\|"trial"\|"active"\|"inactive"\|"unverified", trial_days_left: number\|null, server_active: boolean\|null, days_left: number\|null, expires: string\|null, last_checked_ms: number\|null }` |
+| `get_license_status` | – | `LicenseStatus` | `{ state: "disabled"\|"trial"\|"active"\|"inactive"\|"unverified", trial_days_left: number\|null, server_active: boolean\|null, days_left: number\|null, expires: string\|null, last_checked_ms: number\|null, reason: string\|null }` |
 | `check_license_now` | – | `LicenseStatus` | Forces a server fetch, updates the cache, returns the fresh status. Errors (unreachable) still return a status (from cache/trial) — never a hard error; the failure only logs at warn and the cached fields stand. |
 
 `state` is the *effective* verdict and the trial masks it: during the 7-day
@@ -83,6 +100,15 @@ Those two are what change after "Check now" while the trial is still running;
 UI: Settings gains a "License" tab — key input, server URL input, status line,
 "Check now" button. Mock: state `trial` with 5 days left; `check_license_now`
 returns `active` when the mock key is non-empty, else `inactive`.
+
+Worker KV record (server side, `licensing/worker/`): the KV key is the license
+key; the value is either a legacy bare date `"YYYY-MM-DD"` or a JSON record
+`{expires, tier: "standard"|"premium", note, activated: "YYYY-MM-DD"|null,
+devices: [{id, first_seen, last_seen}]}`. `/check` upgrades legacy values in
+place, stamps `activated` on first sight of a key, tracks at most 3 devices
+(day-granularity `last_seen`, so at most ~1 KV write per device per day), and
+prunes devices unseen for 30 days. `tier` and `note` are admin-only fields
+(`note` is a free-text comment, max 500 chars).
 
 `history_enabled`: when false, new transcriptions are NOT added to the in-app
 history (memory or disk); existing entries stay until "Clear history". The
@@ -139,6 +165,7 @@ Rules:
 | `set_paused` | `{ paused: boolean }` | `null` | Pause/resume global hotkey. |
 | `open_permission_settings` | – | `null` | macOS: deep-link to Accessibility pane; Windows: microphone privacy settings; Linux: no-op. |
 | `open_url` | `{ url: string }` | `null` | Opens an external `https://` URL in the default browser (author profile, Groq console, docs). Rejects anything that is not `https://`. Mock: `window.open`. Replaces the former `open_repo`. |
+| `check_updates` | – | `UpdateStatus` | `{ current: string, latest: string\|null, update_available: boolean, url: string }` — GETs the GitHub `releases/latest` API, compares `tag_name` against the app version (numeric triple; a tag that does not parse yields `latest: null`, never an update). Unlike license checks this DOES hard-error (string) on network failure — the manual button surfaces it. |
 
 Command errors are strings (Tauri default `Result<T, String>`).
 
@@ -149,6 +176,7 @@ Command errors are strings (Tauri default `Result<T, String>`).
 | `app-state` | `{ state: "idle" \| "recording" \| "transcribing" \| "error", message?: string }` |
 | `transcription` | `{ text: string, injected: boolean }` |
 | `model-download-progress` | `{ id: string, downloaded: number, total: number }` |
+| `update-available` | `{ current: string, latest: string, url: string }` — emitted by the daily background update check (24 h tokio interval, first tick at startup) when a newer published release exists. Failures only log at warn. |
 
 ## whispr-core public API (pure Rust, no system deps)
 

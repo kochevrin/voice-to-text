@@ -43,6 +43,10 @@ pub struct CachedCheck {
     pub active: bool,
     #[serde(default)]
     pub expires: Option<String>,
+    /// Why the server said no (`"device_limit"`); `None` on a positive
+    /// verdict or from servers that predate the field.
+    #[serde(default)]
+    pub reason: Option<String>,
     pub checked_at_ms: u64,
 }
 
@@ -163,6 +167,7 @@ mod tests {
         CachedCheck {
             active,
             expires: None,
+            reason: None,
             checked_at_ms: 0,
         }
     }
@@ -354,15 +359,22 @@ mod tests {
         let c = CachedCheck {
             active: true,
             expires: Some("2027-01-31".to_string()),
+            reason: None,
             checked_at_ms: 42,
         };
         let json = serde_json::to_string(&c).unwrap();
         assert_eq!(serde_json::from_str::<CachedCheck>(&json).unwrap(), c);
-        // `expires` may be absent (older cache file).
+        // `expires` and `reason` may be absent (older cache file).
         let c: CachedCheck =
             serde_json::from_str(r#"{"active":false,"checked_at_ms":7}"#).unwrap();
         assert!(!c.active);
         assert_eq!(c.expires, None);
+        assert_eq!(c.reason, None);
         assert_eq!(c.checked_at_ms, 7);
+        let c: CachedCheck = serde_json::from_str(
+            r#"{"active":false,"reason":"device_limit","checked_at_ms":7}"#,
+        )
+        .unwrap();
+        assert_eq!(c.reason.as_deref(), Some("device_limit"));
     }
 }

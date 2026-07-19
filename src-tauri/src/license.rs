@@ -34,6 +34,8 @@ pub struct LicenseStatus {
     pub days_left: Option<u64>,
     pub expires: Option<String>,
     pub last_checked_ms: Option<u64>,
+    /// Why the server rejected the key (`"device_limit"`); `None` otherwise.
+    pub reason: Option<String>,
 }
 
 /// Contents of `<app_data>/license.json`.
@@ -92,6 +94,61 @@ fn store_check(app: &AppHandle, check: CachedCheck) {
 }
 
 // ---------------------------------------------------------------------------
+// Device id
+// ---------------------------------------------------------------------------
+
+/// Stable anonymous install id sent with license checks so the server can
+/// count devices per key. Random on first use (NOT a hardware fingerprint)
+/// and persisted at `<app_data>/device_id`.
+///
+/// Resolved once per process and cached in [`AppState::device_id`]: the id
+/// is read on every hourly check, so without the cache a persistent write
+/// failure would send a fresh random id each hour and exhaust the key's
+/// device slots. The cache also removes the first-run race between concurrent
+/// checks. `AppHandle` is cheap to clone, so the closure captures it.
+pub fn device_id(app: &AppHandle) -> String {
+    app.state::<AppState>()
+        .device_id
+        .get_or_init(|| resolve_device_id(app))
+        .clone()
+}
+
+/// Reads the persisted id, or generates and persists a fresh one. Called at
+/// most once per run through [`device_id`]'s `OnceLock`.
+fn resolve_device_id(app: &AppHandle) -> String {
+    let path = match state::app_data_dir(app) {
+        Ok(dir) => dir.join("device_id"),
+        Err(_) => return generate_device_id(),
+    };
+    if let Ok(existing) = std::fs::read_to_string(&path) {
+        let existing = existing.trim();
+        if (8..=64).contains(&existing.len())
+            && existing.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-' || b == b'_')
+        {
+            return existing.to_string();
+        }
+    }
+    let fresh = generate_device_id();
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    if let Err(e) = std::fs::write(&path, &fresh) {
+        tracing::warn!("failed to persist device_id (the cached id stands for this run): {e}");
+    }
+    fresh
+}
+
+/// 16 random bytes, hex-encoded; falls back to a time-derived id if the OS
+/// RNG is somehow unavailable.
+fn generate_device_id() -> String {
+    let mut buf = [0u8; 16];
+    if getrandom::getrandom(&mut buf).is_err() {
+        return format!("t{:x}", state::now_ms());
+    }
+    buf.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+// ---------------------------------------------------------------------------
 // Server check
 // ---------------------------------------------------------------------------
 
@@ -100,6 +157,8 @@ struct CheckResponse {
     active: bool,
     #[serde(default)]
     expires: Option<String>,
+    #[serde(default)]
+    reason: Option<String>,
 }
 
 /// Joins the server URL with the check path, tolerating a trailing slash.
@@ -109,16 +168,16 @@ fn check_endpoint(server_url: &str) -> String {
     format!("{}/check", server_url.trim_end_matches('/'))
 }
 
-/// GETs `{server_url}/check?key=<key>` and returns the verdict stamped with
-/// the current time.
-pub async fn fetch_check(server_url: &str, key: &str) -> Result<CachedCheck, String> {
+/// GETs `{server_url}/check?key=<key>&device=<device>` and returns the
+/// verdict stamped with the current time.
+pub async fn fetch_check(server_url: &str, key: &str, device: &str) -> Result<CachedCheck, String> {
     let client = reqwest::Client::builder()
         .timeout(CHECK_TIMEOUT)
         .build()
         .map_err(|e| e.to_string())?;
     let resp = client
         .get(check_endpoint(server_url))
-        .query(&[("key", key)])
+        .query(&[("key", key), ("device", device)])
         .send()
         .await
         .map_err(|e| format!("license check request failed: {e}"))?;
@@ -133,6 +192,7 @@ pub async fn fetch_check(server_url: &str, key: &str) -> Result<CachedCheck, Str
     Ok(CachedCheck {
         active: parsed.active,
         expires: parsed.expires,
+        reason: parsed.reason,
         checked_at_ms: state::now_ms(),
     })
 }
@@ -162,6 +222,7 @@ fn build_status(
         days_left: subscription_days_left(cache.and_then(|c| c.expires.as_deref()), now_ms),
         expires: cache.and_then(|c| c.expires.clone()),
         last_checked_ms: cache.map(|c| c.checked_at_ms),
+        reason: cache.and_then(|c| c.reason.clone()),
     }
 }
 
@@ -224,7 +285,8 @@ pub async fn run_check(app: &AppHandle) {
     let settings = state::current_settings(app);
     let server_url = settings.license.server_url.trim().to_string();
     if !server_url.is_empty() {
-        match fetch_check(&server_url, &settings.license.key).await {
+        let device = device_id(app);
+        match fetch_check(&server_url, &settings.license.key, &device).await {
             Ok(check) => store_check(app, check),
             Err(e) => tracing::warn!("license check failed, keeping cached verdict: {e}"),
         }
@@ -301,6 +363,7 @@ mod tests {
         let cache = CachedCheck {
             active: true,
             expires: Some("2027-01-01".to_string()),
+            reason: None,
             checked_at_ms: 123,
         };
         let status = build_status(false, 0, TRIAL_MS + 1, Some(&cache));
@@ -315,6 +378,7 @@ mod tests {
         let cache = CachedCheck {
             active: false,
             expires: None,
+            reason: None,
             checked_at_ms: 5,
         };
         let status = build_status(false, 0, TRIAL_MS, Some(&cache));
@@ -331,6 +395,7 @@ mod tests {
         let cache = CachedCheck {
             active: true,
             expires: Some("1970-02-01".to_string()),
+            reason: None,
             checked_at_ms: 99,
         };
         let status = build_status(false, 0, 0, Some(&cache));
@@ -348,6 +413,7 @@ mod tests {
         let cache = CachedCheck {
             active: false,
             expires: None,
+            reason: None,
             checked_at_ms: 5,
         };
         let status = build_status(false, 0, DAY_MS, Some(&cache));
@@ -374,6 +440,7 @@ mod tests {
         let cache = CachedCheck {
             active: true,
             expires: Some("2026-08-01".to_string()),
+            reason: None,
             checked_at_ms: 1,
         };
         let status = build_status(false, 0, TODAY_MS, Some(&cache));
@@ -399,8 +466,30 @@ mod tests {
             "days_left",
             "expires",
             "last_checked_ms",
+            "reason",
         ] {
             assert!(json.get(key).is_some(), "missing key {key}");
         }
+    }
+
+    #[test]
+    fn status_surfaces_the_server_rejection_reason() {
+        let cache = CachedCheck {
+            active: false,
+            expires: Some("2027-01-01".to_string()),
+            reason: Some("device_limit".to_string()),
+            checked_at_ms: 5,
+        };
+        let status = build_status(false, 0, TRIAL_MS, Some(&cache));
+        assert_eq!(status.state, "inactive");
+        assert_eq!(status.server_active, Some(false));
+        assert_eq!(status.reason.as_deref(), Some("device_limit"));
+        // A positive verdict carries no reason.
+        let ok = CachedCheck {
+            active: true,
+            reason: None,
+            ..cache
+        };
+        assert_eq!(build_status(false, 0, TRIAL_MS, Some(&ok)).reason, None);
     }
 }

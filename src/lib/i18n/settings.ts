@@ -29,6 +29,15 @@ export const settings = {
     "settings.general.uiLanguage": "Interface language",
     "settings.general.uiLanguageHint":
       "Changes the language of this app, not the language you dictate in — that one is in Transcription.",
+    "settings.general.autostart": "Launch at login",
+
+    "settings.updates.title": "Updates",
+    "settings.updates.check": "Check for updates",
+    "settings.updates.checking": "Checking…",
+    "settings.updates.upToDate": "You're up to date — {version}",
+    "settings.updates.available": "New version {version} is available",
+    "settings.updates.download": "Download",
+    "settings.updates.error": "Could not check for updates: {error}",
 
     "settings.transcription.localModel": "Local model",
     "settings.transcription.active": "Active",
@@ -92,6 +101,8 @@ export const settings = {
     "settings.license.state.unverified": "Unverified — could not reach server",
     "settings.license.unknownDate": "unknown date",
     "settings.license.verdict.rejected": "Key rejected — check the key or renew",
+    "settings.license.verdict.deviceLimit":
+      "Device limit reached — this key is already in use on 3 devices",
     "settings.license.verdict.pending": "Not verified yet",
     "settings.license.verdict.active": "Key active",
     "settings.license.verdict.daysLeft": "{days} days left",
@@ -138,6 +149,15 @@ export const settings = {
     "settings.general.uiLanguage": "Мова інтерфейсу",
     "settings.general.uiLanguageHint":
       "Змінює мову цього застосунку, а не мову, якою ви диктуєте, — вона на вкладці «Розпізнавання».",
+    "settings.general.autostart": "Запускати під час входу в систему",
+
+    "settings.updates.title": "Оновлення",
+    "settings.updates.check": "Перевірити оновлення",
+    "settings.updates.checking": "Перевірка…",
+    "settings.updates.upToDate": "У вас найновіша версія — {version}",
+    "settings.updates.available": "Доступна нова версія {version}",
+    "settings.updates.download": "Завантажити",
+    "settings.updates.error": "Не вдалося перевірити оновлення: {error}",
 
     "settings.transcription.localModel": "Локальна модель",
     "settings.transcription.active": "Активна",
@@ -203,6 +223,8 @@ export const settings = {
     "settings.license.unknownDate": "невідомої дати",
     "settings.license.verdict.rejected":
       "Ключ відхилено — перевірте його або поновіть підписку",
+    "settings.license.verdict.deviceLimit":
+      "Досягнуто ліміту пристроїв — цей ключ уже використовується на 3 пристроях",
     "settings.license.verdict.pending": "Ще не перевірено",
     "settings.license.verdict.active": "Ключ активний",
     "settings.license.verdict.daysLeft": "залишилося {days} дн",

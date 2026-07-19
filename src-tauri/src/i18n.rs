@@ -63,6 +63,10 @@ catalog! {
         en: "{detail}; keeping previous settings",
         uk: "{detail}; залишено попередні налаштування"
     }
+    AutostartFailed {
+        en: "failed to update launch at login: {detail}",
+        uk: "не вдалося оновити автозапуск під час входу: {detail}"
+    }
 
     // --- settings / commands ----------------------------------------------
     UnknownModel {

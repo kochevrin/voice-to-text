@@ -146,6 +146,84 @@ describe("Settings (mock mode)", () => {
     ).not.toBeChecked();
   });
 
+  it("persists the autostart toggle across remount", async () => {
+    const user = userEvent.setup();
+    const first = render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    const autostart = screen.getByRole("switch", { name: "Launch at login" });
+    expect(autostart).not.toBeChecked();
+    await user.click(autostart);
+    expect(autostart).toBeChecked();
+
+    const saveButton = screen.getByRole("button", { name: "Save" });
+    await user.click(saveButton);
+    await waitFor(() => expect(saveButton).toBeDisabled());
+    expect(
+      JSON.parse(localStorage.getItem("whispr-mock-settings") ?? "{}"),
+    ).toMatchObject({ autostart: true });
+
+    first.unmount();
+
+    // Fresh mount reads the persisted flag from the mock backend.
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+    expect(
+      screen.getByRole("switch", { name: "Launch at login" }),
+    ).toBeChecked();
+  });
+
+  it("reports the update check result from the General tab", async () => {
+    const user = userEvent.setup();
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    // With no mock update flag set, the backend answers "no update".
+    expect(
+      await screen.findByText("You're up to date — dev"),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Download" }),
+    ).not.toBeInTheDocument();
+  });
+
+  it("offers a Download link when the update check finds a newer version", async () => {
+    const user = userEvent.setup();
+    const open = vi.spyOn(window, "open").mockReturnValue(null);
+    localStorage.setItem("whispr-mock-update", "0.9.9");
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByRole("button", { name: "Check for updates" }));
+    expect(
+      await screen.findByText("New version 0.9.9 is available"),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Download" }));
+    expect(open).toHaveBeenCalledWith(
+      "https://github.com/kochevrin/voice-to-text/releases/latest",
+      "_blank",
+    );
+  });
+
+  it("shows the device-limit reason in the license verdict", async () => {
+    const user = userEvent.setup();
+    render(<Settings />);
+    await screen.findByLabelText("Hotkey");
+
+    await user.click(screen.getByRole("tab", { name: "License" }));
+    // The sentinel key makes the mock report a device-limit rejection.
+    await user.type(screen.getByLabelText("License key"), "DEVICELIMIT");
+    await user.click(screen.getByRole("button", { name: "Check now" }));
+
+    expect(
+      await screen.findByText(
+        "Device limit reached — this key is already in use on 3 devices",
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("persists license key and server URL across remount", async () => {
     const user = userEvent.setup();
     const first = render(<Settings />);
