@@ -36,3 +36,6 @@ Thumbs.db
 
 # Landing site (kept out of the public repo until it moves to the private one)
 /landing/
+
+# Internal design specs / brainstorming docs (public repo — keep these private)
+/docs/superpowers/
