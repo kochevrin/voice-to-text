@@ -39,3 +39,6 @@ Thumbs.db
 
 # Internal design specs / brainstorming docs (public repo — keep these private)
 /docs/superpowers/
+
+# Telegram bot (private — lives in a separate Gitea repo, must not leak to GitHub)
+/bot/
