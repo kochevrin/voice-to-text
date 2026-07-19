@@ -75,10 +75,14 @@ impl LicenseState {
 
 /// Computes the effective license state:
 /// - empty `server_url` → `Disabled` (licensing off, app fully functional);
-/// - within 7 days of first launch → `Trial` (grants usage even over a
-///   cached negative verdict — the trial is checked first);
-/// - afterwards the cached server verdict decides: `Active` / `Inactive`;
-/// - no cache at all → `Unverified` (honor system: works).
+/// - a cached **active** verdict → `Active` — a real subscription wins over
+///   the trial, so entering a valid key flips the status to Active even during
+///   the trial window (rather than staying on the trial countdown);
+/// - otherwise within 7 days of first launch → `Trial` (grants usage before
+///   the user has a key, and masks a cached *negative* verdict during the
+///   trial);
+/// - trial over: the cached verdict decides `Inactive`, or `Unverified` with
+///   no cache at all (honor system: works).
 pub fn evaluate(
     server_url_empty: bool,
     installed_at_ms: u64,
@@ -88,11 +92,13 @@ pub fn evaluate(
     if server_url_empty {
         return LicenseState::Disabled;
     }
+    if matches!(cache, Some(check) if check.active) {
+        return LicenseState::Active;
+    }
     if now_ms.saturating_sub(installed_at_ms) < TRIAL_MS {
         return LicenseState::Trial;
     }
     match cache {
-        Some(check) if check.active => LicenseState::Active,
         Some(_) => LicenseState::Inactive,
         None => LicenseState::Unverified,
     }
@@ -201,14 +207,16 @@ mod tests {
     }
 
     #[test]
-    fn trial_overrides_cached_verdicts() {
-        // The trial grants usage even when a cached response says inactive.
-        assert_eq!(
-            evaluate(false, 0, TRIAL_MS - 1, Some(&cache(false))),
-            LicenseState::Trial
-        );
+    fn active_key_wins_over_trial_but_inactive_is_masked() {
+        // A confirmed-active key flips to Active even inside the trial window
+        // (so entering a valid key stops showing "Trial").
         assert_eq!(
             evaluate(false, 0, TRIAL_MS - 1, Some(&cache(true))),
+            LicenseState::Active
+        );
+        // But the trial still grants usage over a cached *negative* verdict.
+        assert_eq!(
+            evaluate(false, 0, TRIAL_MS - 1, Some(&cache(false))),
             LicenseState::Trial
         );
     }

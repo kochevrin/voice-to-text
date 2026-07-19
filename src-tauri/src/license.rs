@@ -389,9 +389,9 @@ mod tests {
     }
 
     #[test]
-    fn status_reports_server_verdict_during_trial() {
-        // The trial masks the effective state, but the cached server verdict
-        // still surfaces — that is what lets "Check now" change the UI.
+    fn status_active_key_wins_during_trial() {
+        // An active key flips the effective state to Active even inside the
+        // trial window, so a valid key stops showing "Trial".
         let cache = CachedCheck {
             active: true,
             expires: Some("1970-02-01".to_string()),
@@ -399,8 +399,8 @@ mod tests {
             checked_at_ms: 99,
         };
         let status = build_status(false, 0, 0, Some(&cache));
-        assert_eq!(status.state, "trial");
-        assert_eq!(status.trial_days_left, Some(7));
+        assert_eq!(status.state, "active");
+        assert_eq!(status.trial_days_left, None);
         assert_eq!(status.server_active, Some(true));
         // now is 1970-01-01, so 1970-02-01 is 31 days out.
         assert_eq!(status.days_left, Some(31));

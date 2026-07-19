@@ -72,14 +72,16 @@ verdict (`CachedCheck.reason`, surfaced as `LicenseStatus.reason`).
 
 Verdict logic (pure, `whispr_core::license::evaluate`):
 - `server_url` empty → `disabled`.
-- 7-day trial from first launch (`installed_at_ms`, stored in
-  `<app_data>/license.json`): while it lasts → `trial` (works).
-- Cached last successful server response: `active: true` → `active` (works,
-  stale cache OK indefinitely — offline keeps working); `active: false` →
-  `inactive` (**dictation blocked**: hotkey + test recording refuse with a
-  notification; UI/settings/history stay usable).
-- No cache, trial over, server unreachable → `unverified` (works — honor
-  system).
+- Cached **active** verdict → `active` — a real subscription wins over the
+  trial, so entering a valid key flips the status to Active even during the
+  trial window (works; stale cache OK indefinitely — offline keeps working).
+- Otherwise within the 7-day trial from first launch (`installed_at_ms`,
+  stored in `<app_data>/license.json`) → `trial` (works; this also masks a
+  cached *negative* verdict during the trial).
+- Trial over, cached `active: false` → `inactive` (**dictation blocked**:
+  hotkey + test recording refuse with a notification; UI/settings/history stay
+  usable).
+- No cache, trial over → `unverified` (works — honor system).
 Checks run at startup and hourly (tokio interval), plus on license settings
 change; cache persisted in `license.json` `{installed_at_ms, last: {active,
 expires, reason, checked_at_ms}}` (`reason` is `null`/absent except on a
@@ -89,12 +91,12 @@ Commands:
 | `get_license_status` | – | `LicenseStatus` | `{ state: "disabled"\|"trial"\|"active"\|"inactive"\|"unverified", trial_days_left: number\|null, server_active: boolean\|null, days_left: number\|null, expires: string\|null, last_checked_ms: number\|null, reason: string\|null }` |
 | `check_license_now` | – | `LicenseStatus` | Forces a server fetch, updates the cache, returns the fresh status. Errors (unreachable) still return a status (from cache/trial) — never a hard error; the failure only logs at warn and the cached fields stand. |
 
-`state` is the *effective* verdict and the trial masks it: during the 7-day
-trial `state` stays `"trial"` no matter what the server said. `server_active`
-is the cached server verdict itself (`null` until a check first succeeds), and
+`state` is the *effective* verdict: an active key shows `"active"` even during
+the trial, but a not-yet-active key inside the trial window shows `"trial"`
+(masking a cached *negative* verdict until the trial ends). `server_active` is
+the cached server verdict itself (`null` until a check first succeeds), and
 `days_left` is the subscription remainder computed from `expires` vs today
 (UTC calendar days, rounded up, floored at 0, `null` without a usable date).
-Those two are what change after "Check now" while the trial is still running;
 `days_left` is about the key and is independent of `trial_days_left`.
 
 UI: Settings gains a "License" tab — key input, server URL input, status line,
